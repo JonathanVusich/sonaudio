@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteOrder;
 import java.util.Arrays;
-import org.apache.commons.io.IOUtils;
+import dev.javax.sonaudio.format.StreamUtils;
 
 /**
  * Layer III's bit reservoir (ISO/IEC 11172-3 section 2.4.3.4.1.1): a frame's main data may start in the main data of
@@ -41,7 +41,7 @@ final class BitReservoir {
             final InputStream input, final FrameHeader header, final SideInfo sideInfo, final int presentBytes)
             throws IOException {
         final var granulesStart = size - sideInfo.mainDataBegin();
-        IOUtils.readFully(input, bytes, size, header.mainDataSize());
+        StreamUtils.readFully(input, bytes, size, header.mainDataSize());
         size += header.mainDataSize();
         missingBytes = Math.min(header.frameLength() - presentBytes, header.mainDataSize());
         Arrays.fill(bytes, size, size + PADDING, (byte) 0);
@@ -55,7 +55,7 @@ final class BitReservoir {
      * @param input the frame's stream, at its main data
      */
     void restart(final InputStream input, final FrameHeader header) throws IOException {
-        IOUtils.readFully(input, bytes, 0, header.mainDataSize());
+        StreamUtils.readFully(input, bytes, 0, header.mainDataSize());
         size = header.mainDataSize();
         keepLast(Math.min(BACKSTEP, size));
     }

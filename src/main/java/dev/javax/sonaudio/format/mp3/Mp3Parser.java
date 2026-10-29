@@ -2,6 +2,7 @@ package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,9 +19,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.zip.InflaterInputStream;
 import java.util.zip.ZipException;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.io.input.BoundedInputStream;
-import org.apache.commons.io.input.InfiniteCircularInputStream;
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.Format;
 import dev.javax.sonaudio.format.Parser;
@@ -193,18 +191,13 @@ public final class Mp3Parser implements Parser {
      */
     private BoundedInputStream audioFrom(final SeekableByteChannel channel, final long audioStart) throws IOException {
         final var file = Channels.newInputStream(channel.position(audioStart));
-        // NullInputStream leaves the bytes a bulk read fills untouched, which are the buffer's stale ones, not zeros.
-        final var zeros = bounded(new InfiniteCircularInputStream(new byte[] {0}), MAX_FREE_FORMAT_LENGTH);
+        final var zeros = new ByteArrayInputStream(new byte[MAX_FREE_FORMAT_LENGTH]);
         final var padded = new SequenceInputStream(file, zeros);
         return bounded(new BufferedInputStream(padded), Long.MAX_VALUE);
     }
 
-    private BoundedInputStream bounded(final InputStream input, final long length) throws IOException {
-        return BoundedInputStream.builder()
-                .setInputStream(input)
-                .setMaxCount(length)
-                .setPropagateClose(false)
-                .get();
+    private BoundedInputStream bounded(final InputStream input, final long length) {
+        return new BoundedInputStream(input, length);
     }
 
     /**
@@ -446,7 +439,7 @@ public final class Mp3Parser implements Parser {
 
     // The last frame may run past the audio.
     private void skipAudio(final BoundedInputStream audio, final long count) throws IOException {
-        IOUtils.skip(audio, count);
+        audio.skipAvailableBytes(count);
     }
 
     /**

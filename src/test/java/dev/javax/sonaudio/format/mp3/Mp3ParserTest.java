@@ -13,7 +13,6 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
-import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.Test;
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.mp3.Id3Frame.TextFrame;
@@ -276,6 +275,6 @@ class Mp3ParserTest {
     }
 
     private static byte[] nextHeader(final SeekableByteChannel channel) throws IOException {
-        return IOUtils.readFully(Channels.newInputStream(channel), FrameHeader.SIZE);
+        return Channels.newInputStream(channel).readNBytes(FrameHeader.SIZE);
     }
 }

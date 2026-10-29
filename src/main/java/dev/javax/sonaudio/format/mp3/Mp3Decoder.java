@@ -9,8 +9,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.io.input.BoundedInputStream;
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.exception.UncheckedInvalidFormatException;
 import dev.javax.sonaudio.format.FloatPcmAudio;
@@ -203,7 +201,7 @@ public final class Mp3Decoder implements FloatPcmAudio {
     // stream holds no bits after it.
     private void skipToEnd(final long frameEnd) throws IOException {
         bits.alignToByte();
-        IOUtils.skip(input, frameEnd - input.getCount());
+        input.skipAvailableBytes(frameEnd - input.getCount());
     }
 
     /**
@@ -259,7 +257,7 @@ public final class Mp3Decoder implements FloatPcmAudio {
     private boolean decodeFrame(final FrameHeader header, final int presentBytes)
             throws IOException, InvalidFormatException {
         // The CRC isn't checked: a frame that fails it is still decoded, as other decoders do.
-        IOUtils.skip(input, header.protection().crcSize());
+        input.skipAvailableBytes(header.protection().crcSize());
         return switch (header.layer()) {
             case I -> {
                 subbandReader.readLayerI(bits, header);
@@ -290,7 +288,7 @@ public final class Mp3Decoder implements FloatPcmAudio {
             sideInfo = readSideInfo(header);
         } catch (final InvalidFormatException rejected) {
             bits.alignToByte();
-            IOUtils.skip(input, sideInfoStart + header.sideInfoSize() - input.getCount());
+            input.skipAvailableBytes(sideInfoStart + header.sideInfoSize() - input.getCount());
             reservoir.restart(input, header);
             return false;
         }

@@ -3,7 +3,6 @@ package dev.javax.sonaudio.format.mp3;
 import dev.javax.bitstream.BitInputStream;
 import java.io.IOException;
 import java.nio.ByteOrder;
-import org.apache.commons.io.input.BoundedInputStream;
 import dev.javax.sonaudio.format.mp3.FirstFrame.AudioFrame;
 import dev.javax.sonaudio.format.mp3.FirstFrame.VbrHeader;
 
