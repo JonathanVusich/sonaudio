@@ -1,0 +1,21 @@
+name: Java CI with Gradle
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+      # The tests load FFmpeg 7.1 into the JVM, so they run in the image the Dockerfile describes.
+      - name: Build the test image
+        run: docker build -t sonaudio-test .
+      - name: Build with Gradle Wrapper
+        run: docker run --rm -v "$PWD:/workspace" sonaudio-test ./gradlew build javadoc
