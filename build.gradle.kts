@@ -19,9 +19,18 @@ java {
 }
 
 dependencies {
+    api("dev.javax:bitstream:0.2.0-RC")
+    implementation("commons-io:commons-io:2.20.0")
+
+    compileOnly("org.projectlombok:lombok:1.18.46")
+    annotationProcessor("org.projectlombok:lombok:1.18.46")
+    testCompileOnly("org.projectlombok:lombok:1.18.46")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.46")
+
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.assertj:assertj-core:3.27.7")
+    testImplementation("org.apache.commons:commons-compress:1.28.0")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

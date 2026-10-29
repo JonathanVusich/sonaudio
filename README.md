@@ -1,8 +1,15 @@
 # sonaudio
 
-Reads the tags, duration and decoded audio of any file FFmpeg can open, by calling FFmpeg's shared libraries from Java
-with the foreign function API. It has no dependencies, and its API has no types of FFmpeg's: tags are strings, audio is
-16-bit samples.
+Sona's audio layer as a library: it reads the tags, duration and decoded audio of any file FFmpeg can open, by calling
+FFmpeg's shared libraries from Java with the foreign function API (`AudioFile`), and it holds the code that doesn't need
+FFmpeg:
+
+- `format`: hand-written FLAC and MP3 parsers, decoders and a FLAC writer, and the PCM types decoders hand out.
+- `metadata`: the format-agnostic tag model (`RawMetadata`, `Tag`, `TagValue`).
+- `fingerprint`: Chromaprint, as AcoustID identifies recordings by, bit for bit with `fpcalc`.
+
+`AudioFile`'s API has no types of FFmpeg's: tags are strings, audio is 16-bit samples. It isn't connected to the
+`metadata` and `fingerprint` packages yet.
 
 ```java
 final var ffmpeg = new FfmpegLibrary(); // once, shared
