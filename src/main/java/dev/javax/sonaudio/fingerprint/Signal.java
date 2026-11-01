@@ -1,11 +1,8 @@
 package dev.javax.sonaudio.fingerprint;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.Arrays;
-import java.util.function.Supplier;
 import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.exception.UncheckedInvalidFormatException;
 import dev.javax.sonaudio.format.FloatPcmAudio;
 import dev.javax.sonaudio.format.IntPcmAudio;
 import dev.javax.sonaudio.format.IntPcmFrame;
@@ -35,7 +32,7 @@ public final class Signal {
      * @throws InvalidFormatException when the audio is corrupt
      */
     public Signal(final IntPcmAudio audio) throws IOException, InvalidFormatException {
-        this.samples = readUnwrapped(() -> readSamples(audio));
+        this.samples = readSamples(audio);
     }
 
     /**
@@ -45,17 +42,7 @@ public final class Signal {
      * @throws InvalidFormatException when the audio is corrupt
      */
     public Signal(final FloatPcmAudio audio) throws IOException, InvalidFormatException {
-        this.samples = readUnwrapped(() -> new FloatSignalReader(MAX_SAMPLES).read(audio));
-    }
-
-    private static int[] readUnwrapped(final Supplier<int[]> read) throws IOException, InvalidFormatException {
-        try {
-            return read.get();
-        } catch (UncheckedIOException e) {
-            throw e.getCause();
-        } catch (UncheckedInvalidFormatException e) {
-            throw e.getCause();
-        }
+        this.samples = new FloatSignalReader(MAX_SAMPLES).read(audio);
     }
 
     public int sampleCount() {
@@ -66,7 +53,7 @@ public final class Signal {
         return samples[index];
     }
 
-    private static int[] readSamples(final IntPcmAudio audio) {
+    private static int[] readSamples(final IntPcmAudio audio) throws IOException, InvalidFormatException {
         final var inputRate = audio.sampleRate();
         if (inputRate == SAMPLE_RATE) {
             final var channels = readChannels(audio, MAX_SAMPLES, Mixing.AFTER);
@@ -92,13 +79,15 @@ public final class Signal {
      * {@code BEFORE_RESAMPLING}, a layout that libswresample mixes down before it resamples is read as one mixed
      * channel, to hold two minutes of it in memory rather than of every channel.
      */
-    private static Channels readChannels(final IntPcmAudio audio, final int capacity, final Mixing mixing) {
+    private static Channels readChannels(final IntPcmAudio audio, final int capacity, final Mixing mixing)
+            throws IOException, InvalidFormatException {
         final var bitsPerSample = audio.bitsPerSample();
         var samples = new float[0][];
         var layout = ChannelLayout.SEPARATE;
         var length = 0;
         var ending = Ending.ENDED;
-        for (final IntPcmFrame frame : audio) {
+        while (audio.hasNextFrame()) {
+            final var frame = audio.nextFrame();
             layout = channelLayout(frame, audio, mixing);
             final var copied = Math.min(frame.sampleCount(), capacity - length);
             samples = grown(samples, readCount(frame, layout), length + copied, capacity);

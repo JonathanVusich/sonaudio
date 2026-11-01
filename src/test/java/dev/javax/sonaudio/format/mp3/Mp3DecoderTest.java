@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.format.PcmFrame;
 import dev.javax.sonaudio.samples.Mp3Sample;
 
 class Mp3DecoderTest {
@@ -37,8 +36,8 @@ class Mp3DecoderTest {
         try (final var channel = sample.channel()) {
             final var audio = new Mp3Parser().parse(channel).audio();
             var samples = 0L;
-            for (final PcmFrame frame : audio) {
-                samples += frame.sampleCount();
+            while (audio.hasNextFrame()) {
+                samples += audio.nextFrame().sampleCount();
             }
 
             assertThat(samples).isEqualTo(audio.streamInfo().sampleCount());
@@ -139,8 +138,9 @@ class Mp3DecoderTest {
 
         try (final var channel = new SeekableInMemoryByteChannel(joined)) {
             final var rates = new TreeSet<Integer>();
-            for (final var frame : new Mp3Parser().parse(channel).audio()) {
-                rates.add(frame.sampleRate());
+            final var audio = new Mp3Parser().parse(channel).audio();
+            while (audio.hasNextFrame()) {
+                rates.add(audio.nextFrame().sampleRate());
             }
 
             assertThat(rates).containsExactly(32000, 48000);
@@ -175,7 +175,9 @@ class Mp3DecoderTest {
     private static int[] decode(final byte[] bytes) throws IOException, InvalidFormatException {
         try (final var channel = new SeekableInMemoryByteChannel(bytes)) {
             final var samples = IntStream.builder();
-            for (final var frame : new Mp3Parser().parse(channel).audio()) {
+            final var audio = new Mp3Parser().parse(channel).audio();
+            while (audio.hasNextFrame()) {
+                final var frame = audio.nextFrame();
                 for (var index = 0; index < frame.sampleCount(); index++) {
                     for (var frameChannel = 0; frameChannel < frame.channelCount(); frameChannel++) {
                         samples.add(sixteenBits(frame.channelSample(frameChannel, index)));

@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Iterator;
+import java.util.NoSuchElementException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -20,7 +20,7 @@ class FingerprintTest {
 
     @Test
     void matchesFpcalcWhenNothingIsResampled() throws IOException, InvalidFormatException {
-        final var audio = new ChordAudio(11025, 1, 16, 30);
+        final var audio = chordAudio(11025, 1, 16, 30);
 
         final var fingerprint = new Fingerprint(audio);
 
@@ -29,7 +29,7 @@ class FingerprintTest {
 
     @Test
     void matchesFpcalcForSilence() throws IOException, InvalidFormatException {
-        final var audio = new SilentAudio(44100, 2, 10);
+        final var audio = silentAudio(44100, 2, 10);
 
         final var fingerprint = new Fingerprint(audio);
 
@@ -45,7 +45,7 @@ class FingerprintTest {
     })
     void matchesFpcalcWhenResampled(final int sampleRate, final int bitsPerSample, final String referenceName)
             throws IOException, InvalidFormatException {
-        final var audio = new ChordAudio(sampleRate, 2, bitsPerSample, 30);
+        final var audio = chordAudio(sampleRate, 2, bitsPerSample, 30);
 
         final var fingerprint = new Fingerprint(audio);
 
@@ -58,7 +58,7 @@ class FingerprintTest {
     @ParameterizedTest
     @CsvSource({"44100, 2", "48000, 2", "32000, 2", "96000, 2", "8000, 1"})
     void matchesFpcalcForNoise(final int sampleRate, final int channels) throws IOException, InvalidFormatException {
-        final var audio = new NoiseAudio(sampleRate, channels, 25);
+        final var audio = noiseAudio(sampleRate, channels, 25);
 
         final var fingerprint = new Fingerprint(audio);
 
@@ -67,7 +67,7 @@ class FingerprintTest {
 
     @Test
     void audioShorterThanOneFrameHasAnEmptyFingerprint() throws IOException, InvalidFormatException {
-        final var audio = new SilentAudio(44100, 2, 0);
+        final var audio = silentAudio(44100, 2, 0);
 
         final var fingerprint = new Fingerprint(audio);
 
@@ -84,72 +84,61 @@ class FingerprintTest {
      * Chords of three notes that change every 0.4 seconds, picked by a linear congruential generator: the audio
      * {@code gen.py} wrote for {@code fpcalc}, generated the same way.
      */
-    private record ChordAudio(int sampleRate, int channels, int bitsPerSample, int seconds) implements IntPcmAudio {
-
-        @Override
-        public Iterator<IntPcmFrame> iterator() {
-            return new FrameIterator(sampleRate, sampleRate * seconds, channels, this::sample);
-        }
-
-        private int sample(final int index, final int channel) {
-            final var chord = (long) index * 5 / (2L * sampleRate);
-            final var seed = (chord * 1103515245L + 12345) % (1L << 31);
-            var total = 0.0;
-            for (var note = 0; note < 3; note++) {
-                final var pitch = 48 + ((seed >> (8 * note)) % 36);
-                final var frequency = 440.0 * Math.pow(2, (pitch - 69) / 12.0);
-                total += Math.sin(2 * Math.PI * frequency * index / sampleRate + channel);
-            }
-            return (int) Math.round(8000 * total) << (bitsPerSample - 16);
-        }
+    private static IntPcmAudio chordAudio(
+            final int sampleRate, final int channels, final int bitsPerSample, final int seconds) {
+        return new GeneratedAudio(
+                sampleRate,
+                bitsPerSample,
+                channels,
+                sampleRate * seconds,
+                (index, channel) -> chordSample(sampleRate, bitsPerSample, index, channel));
     }
 
-    // Chords as in ChordAudio under noise that is a hash of each sample's position, so the audio can be made again
+    private static int chordSample(final int sampleRate, final int bitsPerSample, final int index, final int channel) {
+        final var chord = (long) index * 5 / (2L * sampleRate);
+        final var seed = (chord * 1103515245L + 12345) % (1L << 31);
+        var total = 0.0;
+        for (var note = 0; note < 3; note++) {
+            final var pitch = 48 + ((seed >> (8 * note)) % 36);
+            final var frequency = 440.0 * Math.pow(2, (pitch - 69) / 12.0);
+            total += Math.sin(2 * Math.PI * frequency * index / sampleRate + channel);
+        }
+        return (int) Math.round(8000 * total) << (bitsPerSample - 16);
+    }
+
+    // Chords as in chordAudio under noise that is a hash of each sample's position, so the audio can be made again
     // anywhere and {@code fpcalc} can be given it.
-    record NoiseAudio(int sampleRate, int channels, int seconds) implements IntPcmAudio {
-
-        @Override
-        public int bitsPerSample() {
-            return 16;
-        }
-
-        @Override
-        public Iterator<IntPcmFrame> iterator() {
-            return new FrameIterator(sampleRate, sampleRate * seconds, channels, this::sample);
-        }
-
-        private int sample(final int index, final int channel) {
-            final var chord = (long) index * 5 / (2L * sampleRate);
-            final var seed = hash(chord * 3);
-            var total = 0.0;
-            for (var note = 0; note < 3; note++) {
-                final var pitch = 48 + ((seed >>> (8 * note)) & 0xFF) % 36;
-                final var frequency = 440.0 * Math.pow(2, (pitch - 69) / 12.0);
-                total += Math.sin(2 * Math.PI * frequency * index / sampleRate + channel);
-            }
-            final var noise = (int) (hash(2L * index + channel) >>> 48) - 32768;
-            return (int) Math.round(5000 * total + noise / 16.0);
-        }
-
-        private static long hash(final long value) {
-            var mixed = value * 0x9E3779B97F4A7C15L;
-            mixed = (mixed ^ (mixed >>> 30)) * 0xBF58476D1CE4E5B9L;
-            mixed = (mixed ^ (mixed >>> 27)) * 0x94D049BB133111EBL;
-            return mixed ^ (mixed >>> 31);
-        }
+    private static IntPcmAudio noiseAudio(final int sampleRate, final int channels, final int seconds) {
+        return new GeneratedAudio(
+                sampleRate,
+                16,
+                channels,
+                sampleRate * seconds,
+                (index, channel) -> noiseSample(sampleRate, index, channel));
     }
 
-    private record SilentAudio(int sampleRate, int channels, int seconds) implements IntPcmAudio {
-
-        @Override
-        public int bitsPerSample() {
-            return 16;
+    private static int noiseSample(final int sampleRate, final int index, final int channel) {
+        final var chord = (long) index * 5 / (2L * sampleRate);
+        final var seed = hash(chord * 3);
+        var total = 0.0;
+        for (var note = 0; note < 3; note++) {
+            final var pitch = 48 + ((seed >>> (8 * note)) & 0xFF) % 36;
+            final var frequency = 440.0 * Math.pow(2, (pitch - 69) / 12.0);
+            total += Math.sin(2 * Math.PI * frequency * index / sampleRate + channel);
         }
+        final var noise = (int) (hash(2L * index + channel) >>> 48) - 32768;
+        return (int) Math.round(5000 * total + noise / 16.0);
+    }
 
-        @Override
-        public Iterator<IntPcmFrame> iterator() {
-            return new FrameIterator(sampleRate, sampleRate * seconds, channels, (_, _) -> 0);
-        }
+    private static long hash(final long value) {
+        var mixed = value * 0x9E3779B97F4A7C15L;
+        mixed = (mixed ^ (mixed >>> 30)) * 0xBF58476D1CE4E5B9L;
+        mixed = (mixed ^ (mixed >>> 27)) * 0x94D049BB133111EBL;
+        return mixed ^ (mixed >>> 31);
+    }
+
+    private static IntPcmAudio silentAudio(final int sampleRate, final int channels, final int seconds) {
+        return new GeneratedAudio(sampleRate, 16, channels, sampleRate * seconds, (_, _) -> 0);
     }
 
     @FunctionalInterface
@@ -157,30 +146,50 @@ class FingerprintTest {
         int sample(int index, int channel);
     }
 
-    private static final class FrameIterator implements Iterator<IntPcmFrame> {
+    private static final class GeneratedAudio implements IntPcmAudio {
 
         private static final int FRAME_SIZE = 4096;
 
         private final int sampleRate;
-        private final int sampleCount;
+        private final int bitsPerSample;
         private final int channels;
+        private final int sampleCount;
         private final SampleSource source;
         private int next;
 
-        FrameIterator(final int sampleRate, final int sampleCount, final int channels, final SampleSource source) {
+        GeneratedAudio(
+                final int sampleRate,
+                final int bitsPerSample,
+                final int channels,
+                final int sampleCount,
+                final SampleSource source) {
             this.sampleRate = sampleRate;
-            this.sampleCount = sampleCount;
+            this.bitsPerSample = bitsPerSample;
             this.channels = channels;
+            this.sampleCount = sampleCount;
             this.source = source;
         }
 
         @Override
-        public boolean hasNext() {
+        public int sampleRate() {
+            return sampleRate;
+        }
+
+        @Override
+        public int bitsPerSample() {
+            return bitsPerSample;
+        }
+
+        @Override
+        public boolean hasNextFrame() {
             return next < sampleCount;
         }
 
         @Override
-        public IntPcmFrame next() {
+        public IntPcmFrame nextFrame() {
+            if (!hasNextFrame()) {
+                throw new NoSuchElementException("Audio has no more frames!");
+            }
             final var samples = new int[channels][Math.min(FRAME_SIZE, sampleCount - next)];
             for (var i = 0; i < samples[0].length; i++, next++) {
                 for (var channel = 0; channel < channels; channel++) {

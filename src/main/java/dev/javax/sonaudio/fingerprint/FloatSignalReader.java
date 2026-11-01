@@ -1,6 +1,8 @@
 package dev.javax.sonaudio.fingerprint;
 
+import java.io.IOException;
 import java.util.Arrays;
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.FloatPcmAudio;
 import dev.javax.sonaudio.format.FloatPcmFrame;
 import dev.javax.sonaudio.format.FrameContinuity;
@@ -27,12 +29,11 @@ final class FloatSignalReader {
     /**
      * @return at most {@code maxSamples} samples
      */
-    int[] read(final FloatPcmAudio audio) {
-        final var rest = audio.iterator();
-        if (!rest.hasNext()) {
+    int[] read(final FloatPcmAudio audio) throws IOException, InvalidFormatException {
+        if (!audio.hasNextFrame()) {
             return new int[0];
         }
-        final var first = rest.next();
+        final var first = audio.nextFrame();
         if (first.continuity() == FrameContinuity.AFTER_DECODING_ERROR) {
             return new int[0];
         }
@@ -48,10 +49,10 @@ final class FloatSignalReader {
                 stretch = new Stretch(frame.sampleRate(), frame.channelCount());
             }
             stretch.add(frame);
-            if (finishedCount + stretch.outputEstimate() >= maxSamples + MARGIN || !rest.hasNext()) {
+            if (finishedCount + stretch.outputEstimate() >= maxSamples + MARGIN || !audio.hasNextFrame()) {
                 break;
             }
-            frame = rest.next();
+            frame = audio.nextFrame();
             if (frame.continuity() == FrameContinuity.AFTER_DECODING_ERROR) {
                 break;
             }

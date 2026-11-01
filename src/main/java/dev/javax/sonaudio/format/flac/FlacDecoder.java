@@ -3,23 +3,18 @@ package dev.javax.sonaudio.format.flac;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.NoSuchElementException;
 import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.exception.UncheckedInvalidFormatException;
 import dev.javax.sonaudio.format.IntPcmAudio;
 import dev.javax.sonaudio.format.IntPcmFrame;
-import dev.javax.sonaudio.format.Iteration;
 
 /**
- * Decodes the audio frames of a FLAC stream to PCM samples (RFC 9639 section 9), a frame at a time as it's iterated,
- * so callers that only need the start of the audio can stop early. {@link FlacParser#parse} opens one, in its {@link ParsedFlac}. It reads
- * the stream once, so it can only be iterated once.
+ * Decodes the audio frames of a FLAC stream to PCM samples (RFC 9639 section 9), a frame at a time as each is asked
+ * for, so callers that only need the start of the audio can stop early. {@link FlacParser#parse} opens one, in its
+ * {@link ParsedFlac}.
  *
- * <p>The iterator throws {@link UncheckedIOException} when the stream can't be read, with an {@link EOFException}
- * when it ends before a frame does, and {@link UncheckedInvalidFormatException} when a frame is corrupt.
+ * <p>{@link #nextFrame} throws an {@link EOFException} when the stream ends before a frame does.
  */
 public final class FlacDecoder implements IntPcmAudio {
 
@@ -31,7 +26,6 @@ public final class FlacDecoder implements IntPcmAudio {
 
     private final StreamInfo streamInfo;
     private final FrameReader reader;
-    private Iteration iteration = Iteration.NOT_STARTED;
     private long samplesDecoded;
 
     /**
@@ -56,45 +50,16 @@ public final class FlacDecoder implements IntPcmAudio {
         return streamInfo.bitsPerSample();
     }
 
-    /**
-     * @throws IllegalStateException when called a second time
-     */
     @Override
-    public Iterator<IntPcmFrame> iterator() {
-        if (iteration == Iteration.STARTED) {
-            throw new IllegalStateException("FLAC decoder can only be iterated once!");
+    public IntPcmFrame nextFrame() throws IOException, InvalidFormatException {
+        if (!hasNextFrame()) {
+            throw new NoSuchElementException("FLAC stream has no more frames!");
         }
-        iteration = Iteration.STARTED;
-        return new FrameIterator();
+        return readFrame();
     }
 
-    private final class FrameIterator implements Iterator<IntPcmFrame> {
-
-        @Override
-        public boolean hasNext() {
-            try {
-                return hasNextFrame();
-            } catch (final IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        }
-
-        @Override
-        public IntPcmFrame next() {
-            if (!hasNext()) {
-                throw new NoSuchElementException("FLAC stream has no more frames!");
-            }
-            try {
-                return readFrame();
-            } catch (final IOException e) {
-                throw new UncheckedIOException(e);
-            } catch (final InvalidFormatException e) {
-                throw new UncheckedInvalidFormatException(e);
-            }
-        }
-    }
-
-    private boolean hasNextFrame() throws IOException {
+    @Override
+    public boolean hasNextFrame() throws IOException {
         // A stream may end with other data, like an ID3v1 tag, so stop at the length STREAMINFO gives when it has one.
         final var totalSamples = streamInfo.interChannelSamples();
         if (totalSamples > 0) {

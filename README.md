@@ -8,7 +8,7 @@ code, and it doesn't call either of them.
 
 - `format`: FLAC and MP3 parsers and decoders, a FLAC writer, and the PCM types decoders hand out (`IntPcmAudio`,
   `FloatPcmAudio`). A parser reads a file's tags and duration through a `SeekableByteChannel`, and its decoder reads the
-  audio from the same channel a frame at a time, so nothing is decoded unless it's iterated.
+  audio from the same channel a frame at a time, so nothing is decoded unless it's asked for.
 - `metadata`: the format-agnostic tag model (`RawMetadata`, `Tag`, `TagValue`).
 - `fingerprint`: Chromaprint. Its fingerprints match `fpcalc`'s: identical for 552 of 555 real tracks tried, and 1 bit
   off for the other three, which AcoustID matches to the same recordings. `Fingerprint.compressed()` is the base64 form
