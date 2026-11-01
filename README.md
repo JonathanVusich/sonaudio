@@ -10,7 +10,9 @@ code, and it doesn't call either of them.
   `FloatPcmAudio`). A parser reads a file's tags and duration through a `SeekableByteChannel`, and its decoder reads the
   audio from the same channel a frame at a time, so nothing is decoded unless it's iterated.
 - `metadata`: the format-agnostic tag model (`RawMetadata`, `Tag`, `TagValue`).
-- `fingerprint`: Chromaprint, bit for bit with `fpcalc`. `Fingerprint.compressed()` is the base64 form AcoustID takes.
+- `fingerprint`: Chromaprint. Its fingerprints match `fpcalc`'s: identical for 552 of 555 real tracks tried, and 1 bit
+  off for the other three, which AcoustID matches to the same recordings. `Fingerprint.compressed()` is the base64 form
+  AcoustID takes.
 
 Parsers throw `InvalidFormatException` for a file that's malformed, rather than skip or guess.
 

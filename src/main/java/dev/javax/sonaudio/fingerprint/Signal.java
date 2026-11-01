@@ -12,8 +12,8 @@ import dev.javax.sonaudio.format.IntPcmFrame;
 
 /**
  * The start of a file's audio as {@code fpcalc} reads it: 16-bit mono samples at 11025 Hz, the first two minutes at
- * most. It brings the audio there as FFmpeg's libswresample does for {@code fpcalc}, in single-precision floating
- * point (see {@link Resampler}), so the samples are the ones {@code fpcalc} makes.
+ * most. It brings the audio there with the filter FFmpeg's libswresample uses for {@code fpcalc} (see
+ * {@link Resampler}), so the samples match {@code fpcalc}'s to within rounding.
  */
 public final class Signal {
 
