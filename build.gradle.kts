@@ -12,7 +12,6 @@ repositories {
 }
 
 java {
-    // The foreign function API is final from Java 22.
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
     }
@@ -36,8 +35,6 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
-    // The tests load FFmpeg's shared libraries, which a container has (see the Dockerfile).
-    jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
 signing {
@@ -50,7 +47,7 @@ mavenPublishing {
 
     pom {
         name.set("sonaudio")
-        description.set("Reads tags, duration and decoded audio from any format through FFmpeg's shared libraries")
+        description.set("Hand-written FLAC and MP3 readers, a tag model and Chromaprint fingerprints for audio files")
         url.set("https://github.com/JonathanVusich/sonaudio")
 
         licenses {

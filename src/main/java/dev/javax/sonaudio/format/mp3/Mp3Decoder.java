@@ -2,29 +2,24 @@ package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.exception.UncheckedInvalidFormatException;
 import dev.javax.sonaudio.format.FloatPcmAudio;
 import dev.javax.sonaudio.format.FloatPcmFrame;
 import dev.javax.sonaudio.format.FrameContinuity;
-import dev.javax.sonaudio.format.Iteration;
 
 /**
- * The audio of an MP3, which {@link Mp3Parser#parse} opens in its {@link ParsedMp3}, decoded a frame at a time as it's
- * iterated, to floating point, as MPEG audio has no bit depth of its own. It decodes as FFmpeg does, as AcoustID's fpcalc
+ * The audio of an MP3, which {@link Mp3Parser#parse} opens in its {@link ParsedMp3}, decoded a frame at a time as each
+ * is asked for, to floating point, as MPEG audio has no bit depth of its own. It decodes as FFmpeg does, as AcoustID's fpcalc
  * decodes with it: the frames FFmpeg's parser finds, in Layers I, II and III, with each frame's own channels, as a
  * stream may change between mono and stereo, and FFmpeg's trimming of the encoder's delay and padding a LAME tag gives.
  * Every frame is a {@link FloatPcmFrame} of its own.
  *
- * <p>The iterator throws {@link UncheckedIOException} when the stream can't be read, and
- * {@link UncheckedInvalidFormatException} when a frame's header can't be read.
+ * <p>It throws {@link InvalidFormatException} when a frame's header can't be read.
  *
  * <p>A Layer III frame is read from the file's stream in turn: its header, through the parser, its side information
  * (ISO/IEC 11172-3 section 2.4.1.7, ISO/IEC 13818-3 section 2.4.1.7), and its main data, which may start in the frames
@@ -84,7 +79,9 @@ public final class Mp3Decoder implements FloatPcmAudio {
     private final PolyphaseSynthesis[] syntheses = {new PolyphaseSynthesis(), new PolyphaseSynthesis()};
     // The samples as FFmpeg makes them in floating point, which a frame copies from.
     private final float[][] samples = new float[MAX_CHANNELS][MAX_SAMPLES_PER_FRAME];
-    private Iteration iteration = Iteration.NOT_STARTED;
+    // The frame hasNextFrame decoded, until nextFrame gives it.
+    private FloatPcmFrame nextFrame;
+    private Progress progress = Progress.DECODING;
     // Set once FFmpeg would have returned an error for a frame it dropped, which stops fpcalc reading.
     private FrameContinuity continuity = FrameContinuity.CONTINUOUS;
     // Decoded samples still to skip from the start, as FFmpeg skips them from what it decodes.
@@ -118,55 +115,31 @@ public final class Mp3Decoder implements FloatPcmAudio {
         return BITS_PER_SAMPLE;
     }
 
-    /**
-     * @throws IllegalStateException when called a second time
-     */
+    // Whether there's a next frame is only known once it's decoded, as FFmpeg may drop or trim a frame whole.
     @Override
-    public Iterator<FloatPcmFrame> iterator() {
-        if (iteration == Iteration.STARTED) {
-            throw new IllegalStateException("MP3 decoder can only be iterated once!");
+    public boolean hasNextFrame() throws IOException, InvalidFormatException {
+        if (nextFrame == null && progress == Progress.DECODING) {
+            nextFrame = decodeNextGivenFrame();
+            if (nextFrame == null) {
+                progress = Progress.ENDED;
+            }
         }
-        iteration = Iteration.STARTED;
-        return new FrameIterator();
+        return nextFrame != null;
+    }
+
+    @Override
+    public FloatPcmFrame nextFrame() throws IOException, InvalidFormatException {
+        if (!hasNextFrame()) {
+            throw new NoSuchElementException("MP3 stream has no more frames!");
+        }
+        final var frame = nextFrame;
+        nextFrame = null;
+        return frame;
     }
 
     private enum Progress {
         DECODING,
         ENDED
-    }
-
-    // Whether there's a next frame is only known once it's decoded, as FFmpeg may drop or trim a frame whole.
-    private final class FrameIterator implements Iterator<FloatPcmFrame> {
-
-        private FloatPcmFrame next;
-        private Progress progress = Progress.DECODING;
-
-        @Override
-        public boolean hasNext() {
-            if (next == null && progress == Progress.DECODING) {
-                try {
-                    next = decodeNextGivenFrame();
-                } catch (final IOException e) {
-                    throw new UncheckedIOException(e);
-                } catch (final InvalidFormatException e) {
-                    throw new UncheckedInvalidFormatException(e);
-                }
-                if (next == null) {
-                    progress = Progress.ENDED;
-                }
-            }
-            return next != null;
-        }
-
-        @Override
-        public FloatPcmFrame next() {
-            if (!hasNext()) {
-                throw new NoSuchElementException("MP3 stream has no more frames!");
-            }
-            final var frame = next;
-            next = null;
-            return frame;
-        }
     }
 
     /**

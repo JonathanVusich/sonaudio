@@ -1,37 +1,30 @@
 package dev.javax.sonaudio.format.mp3;
 
 /**
- * The polyphase synthesis filterbank, which turns each instant's 32 subband samples into 32 PCM samples (ISO/IEC
- * 11172-3 section 2.4.3.2, Figure A.2): the subband samples are transformed by a 32-point DCT into values pushed onto
- * a history, 512 of which are weighted by the synthesis window and summed in 16s. It works as FFmpeg's floating-point
- * decoder does on x86 processors, as AcoustID's fpcalc decodes with it, in the same order of operations (the DCT as
- * the AVX assembly adds, and the window as the SSE inline assembly does), so the samples come out the same floats. The
- * decoder keeps one per channel, as each instant uses the history of the instants before.
+ * The polyphase synthesis filterbank, which turns each instant's 32 subband samples into 32 PCM samples, as ISO/IEC
+ * 11172-3 Figure A.2 lays it out: the subband samples are matrixed into 64 values pushed onto a history of 1024, and
+ * 512 of those are weighted by the synthesis window and summed in 16s. It works in doubles. The decoder keeps one per
+ * channel, as each instant uses the history of the instants before.
  */
 final class PolyphaseSynthesis {
 
     private static final int SUBBANDS = Spectrum.SUBBANDS;
-    private static final int HISTORY = 512;
-    private static final int SUMS = 17;
-    private static final int PARTS = 8;
-    private static final int PART_STRIDE = 64;
-    private static final int SHORT_STRIDE = 16;
-    // The window FFmpeg's assembly takes with the extra copies it needs, so that it needn't shuffle.
-    private static final float[] WINDOW = window();
-    private static final int SCALE_BITS = 23;
+    private static final int VALUES = 2 * SUBBANDS;
+    private static final int HISTORY = 1024;
+    private static final int STEPS = 16;
+    // The subband samples come in with full scale at 2^23.
+    private static final double INPUT_SCALE = Math.scalb(1.0, -23);
+    // cos((16 + i) * (2k + 1) * pi / 64), the matrixing of Figure A.2.
+    private static final double[][] MATRIX = matrix();
+    private static final double[] WINDOW = window();
 
     // A Layer II frame's 36 instants are the most synthesized at once.
     private static final int MAX_INSTANTS = 36;
 
-    // The history of DCT outputs, with the room to copy the first 32 after the last 512.
-    private final float[] history = new float[2 * HISTORY];
-    private final float[] input = new float[SUBBANDS];
+    // The matrixed values, newest first from offset, wrapping round.
+    private final double[] history = new double[HISTORY];
+    private final double[] input = new double[SUBBANDS];
     private final float[] pcm = new float[MAX_INSTANTS * SUBBANDS];
-    private final float[] sumA = new float[SUMS];
-    private final float[] sumB = new float[SUMS];
-    private final float[] sumC = new float[SUMS];
-    private final float[] sumD = new float[SUMS];
-    private final Dct32 dct = new Dct32();
     private int offset;
 
     /**
@@ -41,11 +34,11 @@ final class PolyphaseSynthesis {
     void synthesize(final SubbandSamples subbandSamples, final int instants) {
         for (var instant = 0; instant < instants; instant++) {
             for (var subband = 0; subband < SUBBANDS; subband++) {
-                input[subband] = subbandSamples.subbandSample(instant, subband);
+                input[subband] = subbandSamples.subbandSample(instant, subband) * INPUT_SCALE;
             }
-            dct.transform(history, offset, input, 0);
+            offset = (offset - VALUES) & (HISTORY - 1);
+            pushMatrixedValues();
             applyWindow(instant * SUBBANDS);
-            offset = offset - SUBBANDS & HISTORY - 1;
         }
     }
 
@@ -56,63 +49,42 @@ final class PolyphaseSynthesis {
         return pcm[index];
     }
 
-    // FFmpeg's apply_window_mp3 for SSE: four sums of 8 products for 16 samples each, then their combination.
+    private void pushMatrixedValues() {
+        for (var value = 0; value < VALUES; value++) {
+            var sum = 0.0;
+            for (var subband = 0; subband < SUBBANDS; subband++) {
+                sum += MATRIX[value][subband] * input[subband];
+            }
+            history[(offset + value) & (HISTORY - 1)] = sum;
+        }
+    }
+
+    // Each sample sums 16 values: from every 128 of the history, the sample's among the first 32 and the last 32.
     private void applyWindow(final int outputStart) {
-        System.arraycopy(history, offset, history, offset + HISTORY, SUBBANDS);
-        sumProducts(offset + SHORT_STRIDE, 0, HISTORY, sumA, sumC);
-        sumProducts(offset + 2 * SHORT_STRIDE, 3 * SHORT_STRIDE, HISTORY + 8 * SHORT_STRIDE, sumB, sumD);
-        for (var part = 0; part < PARTS; part++) {
-            sumA[0] += WINDOW[2 * SHORT_STRIDE + part * PART_STRIDE]
-                    * history[offset + 3 * SHORT_STRIDE + part * PART_STRIDE];
-        }
-        sumC[0] = 0;
-        sumB[16] = 0;
-        sumD[16] = 0;
-        for (var sample = 0; sample < SHORT_STRIDE; sample++) {
-            pcm[outputStart + sample] = sumD[SHORT_STRIDE - sample] - sumA[sample];
-        }
-        for (var sample = 1; sample < SHORT_STRIDE; sample++) {
-            pcm[outputStart + SUBBANDS - sample] = sumC[sample] + sumB[SHORT_STRIDE - sample];
-        }
-        var sum = 0f;
-        for (var part = 0; part < PARTS; part++) {
-            sum -= WINDOW[3 * SHORT_STRIDE + part * PART_STRIDE]
-                    * history[offset + 2 * SHORT_STRIDE + part * PART_STRIDE];
-        }
-        pcm[outputStart + SHORT_STRIDE] = sum;
-    }
-
-    // Two sums for each of 16 samples, of the 8 products of the history with the window, taken away from 0 in turn.
-    private void sumProducts(
-            final int historyStart,
-            final int firstWindow,
-            final int secondWindow,
-            final float[] first,
-            final float[] second) {
-        for (var sample = 0; sample < SHORT_STRIDE; sample++) {
-            var firstSum = 0f;
-            var secondSum = 0f;
-            for (var part = 0; part < PARTS; part++) {
-                final var value = history[historyStart + sample + part * PART_STRIDE];
-                firstSum -= WINDOW[firstWindow + sample + part * PART_STRIDE] * value;
-                secondSum -= WINDOW[secondWindow + sample + part * SHORT_STRIDE] * value;
+        for (var sample = 0; sample < SUBBANDS; sample++) {
+            var sum = 0.0;
+            for (var step = 0; step < STEPS; step++) {
+                final var start = (step / 2) * 128 + (step % 2) * 96;
+                sum += history[(offset + start + sample) & (HISTORY - 1)] * WINDOW[sample + SUBBANDS * step];
             }
-            first[sample] = firstSum;
-            second[sample] = secondSum;
+            pcm[outputStart + sample] = (float) sum;
         }
     }
 
-    // The 512 coefficients, then the two copies of them FFmpeg's assembly reads: 16 at a time, in reverse order.
-    private static float[] window() {
-        final var window = new float[512 + 256];
-        for (var index = 0; index < 512; index++) {
-            window[index] = (float) Math.scalb(SynthesisWindow.coefficient(index), -SCALE_BITS);
-        }
-        for (var part = 0; part < PARTS; part++) {
-            for (var value = 0; value < SHORT_STRIDE; value++) {
-                window[512 + SHORT_STRIDE * part + value] = window[PART_STRIDE * part + 32 - value];
-                window[512 + 128 + SHORT_STRIDE * part + value] = window[PART_STRIDE * part + 48 - value];
+    private static double[][] matrix() {
+        final var matrix = new double[VALUES][SUBBANDS];
+        for (var value = 0; value < VALUES; value++) {
+            for (var subband = 0; subband < SUBBANDS; subband++) {
+                matrix[value][subband] = Math.cos((16 + value) * (2 * subband + 1) * Math.PI / 64);
             }
+        }
+        return matrix;
+    }
+
+    private static double[] window() {
+        final var window = new double[SynthesisWindow.SIZE];
+        for (var index = 0; index < window.length; index++) {
+            window[index] = SynthesisWindow.coefficient(index);
         }
         return window;
     }
