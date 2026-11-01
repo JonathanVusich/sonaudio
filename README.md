@@ -2,8 +2,9 @@
 
 Sona's audio layer as a library: hand-written readers for audio files, the tag model they fill in, and the
 fingerprints AcoustID identifies recordings by. It's pure Java: no native code, and no audio libraries behind it.
-Where the code says it does something "as FFmpeg does" or "as `fpcalc` does", that's the behaviour it reproduces so its
-output matches theirs, not something it calls.
+It aims to match the output of FFmpeg and `fpcalc` (the same decoded samples, the same fingerprints), but it isn't a
+clone of either: where the code says it does something "as FFmpeg does", it's reproducing that result, not FFmpeg's
+code, and it doesn't call either of them.
 
 - `format`: FLAC and MP3 parsers and decoders, a FLAC writer, and the PCM types decoders hand out (`IntPcmAudio`,
   `FloatPcmAudio`). A parser reads a file's tags and duration through a `SeekableByteChannel`, and its decoder reads the
