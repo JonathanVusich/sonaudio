@@ -5,14 +5,9 @@ import java.util.Arrays;
 /**
  * Resamples one channel of floating-point audio the way FFmpeg's libswresample does as {@code fpcalc} configures it
  * (16 filter taps for the lower rate, 256 phases, linear interpolation between them, a cutoff at 0.8 of the lower
- * rate's Nyquist frequency and a Kaiser window with beta 9), step for step in single precision. The filter has as many
+ * rate's Nyquist frequency and a Kaiser window with beta 9), with the taps summed in doubles. The filter has as many
  * phases as the two rates need to be exact, up to 256. The samples before the start of the audio are its mirror image,
  * and the end, once it's known, is reflected too.
- *
- * <p>The taps are added up as libswresample's x86 code for processors with FMA3 does, which is what {@code fpcalc}
- * runs on nearly every current x86-64 processor, so the output is bit for bit what it makes there. Its plain C code,
- * used elsewhere, adds the taps in another order and so differs in the last bit of a few samples in a hundred
- * thousand.
  */
 public final class Resampler {
 
@@ -21,9 +16,6 @@ public final class Resampler {
     private static final double CUTOFF = 0.8;
     private static final double KAISER_BETA = 9;
     private static final int FILTER_ALIGNMENT = 8;
-    // FFmpeg's FMA3 code adds the taps in the eight lanes of a vector register.
-    private static final int LANES = 8;
-    private static final int HALF_LANES = LANES / 2;
     // libswresample doubles its increments until one of them reaches this.
     private static final int INCREMENT_LIMIT = 1 << 20;
 
@@ -36,9 +28,6 @@ public final class Resampler {
     private final int sourceIncrement;
     private final int incrementQuotient;
     private final int incrementRemainder;
-
-    private final float[] sums = new float[LANES];
-    private final float[] nextSums = new float[LANES];
 
     private enum End {
         OPEN,
@@ -158,46 +147,29 @@ public final class Resampler {
     // One output sample: the filter for this phase applied to the samples from offset on.
     private float outputSample(final float[] samples, final int offset, final int index, final int fraction) {
         final var row = filterStride * index;
-        accumulate(samples, offset, row, filterLength, sums);
-        fold(sums);
+        final var sum = filtered(samples, offset, row, filterLength);
         if (incrementRemainder != 0 || fraction != 0) {
-            return interpolatedSample(samples, offset, row, fraction);
+            return interpolatedSample(samples, offset, row, fraction, sum);
         }
-        return total(sums);
+        return (float) sum;
     }
 
     // The sums of this phase's filter and the next one's, blended by how far between the two the output falls.
-    private float interpolatedSample(final float[] samples, final int offset, final int row, final int fraction) {
-        accumulate(samples, offset, row + filterStride, filterStride, nextSums);
-        fold(nextSums);
-        final var weight = (float) fraction * (1.0f / (float) sourceIncrement);
-        for (var lane = 0; lane < HALF_LANES; lane++) {
-            sums[lane] = Math.fma(nextSums[lane] - sums[lane], weight, sums[lane]);
-        }
-        return total(sums);
+    private float interpolatedSample(
+            final float[] samples, final int offset, final int row, final int fraction, final double sum) {
+        final var next = filtered(samples, offset, row + filterStride, filterStride);
+        final var weight = (double) fraction / sourceIncrement;
+        return (float) (sum + (next - sum) * weight);
     }
 
-    // The taps added into eight sums, each of every eighth tap by fused multiply-adds, as FFmpeg's FMA3 code does.
-    // The next phase's filter is summed to the end of its padding, as the last phase's shifted copy of the first has a
-    // tap there.
-    private void accumulate(
-            final float[] samples, final int offset, final int row, final int tapCount, final float[] lanes) {
-        Arrays.fill(lanes, 0f);
+    // The filter's taps applied to the samples from offset on. The next phase's filter is summed to the end of its
+    // padding, as the last phase's shifted copy of the first has a tap there.
+    private double filtered(final float[] samples, final int offset, final int row, final int tapCount) {
+        var sum = 0.0;
         for (var i = 0; i < tapCount; i++) {
-            final var lane = i % LANES;
-            lanes[lane] = Math.fma(samples[offset + i], filterBank[row + i], lanes[lane]);
+            sum += (double) samples[offset + i] * filterBank[row + i];
         }
-    }
-
-    // The upper four sums added onto the lower four.
-    private static void fold(final float[] lanes) {
-        for (var lane = 0; lane < HALF_LANES; lane++) {
-            lanes[lane] += lanes[lane + HALF_LANES];
-        }
-    }
-
-    private static float total(final float[] lanes) {
-        return (lanes[0] + lanes[2]) + (lanes[1] + lanes[3]);
+        return sum;
     }
 
     private float[] filterBank(final double factor) {

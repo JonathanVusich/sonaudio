@@ -306,7 +306,7 @@ final class Spectrum {
             return 0;
         }
         if (magnitude < LINBITS_VALUE) {
-            lines[line] = signed(bits, FfmpegTables.requantized(exponent, magnitude));
+            lines[line] = signed(bits, Requantization.requantized(exponent, magnitude));
             return 1;
         }
         final var linbits = table.linbits();
@@ -314,7 +314,7 @@ final class Spectrum {
         if (linbits > 0) {
             value += (int) bits.readBits(linbits);
         }
-        lines[line] = signed(bits, FfmpegTables.requantizedLarge(value, exponent));
+        lines[line] = signed(bits, Requantization.requantized(exponent, value));
         return linbits + 1;
     }
 
@@ -352,7 +352,7 @@ final class Spectrum {
         if (magnitude == 0) {
             return 0;
         }
-        return signed(bits, FfmpegTables.requantizedOne(exponents[line]));
+        return signed(bits, Requantization.requantized(exponents[line], 1));
     }
 
     // A sign bit of 1 is negative.
