@@ -33,6 +33,11 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+// Warnings fail the build. Sonaudio serializes nothing, so classes need no serialVersionUID.
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.addAll(listOf("-Xlint:all,-processing,-serial", "-Werror"))
+}
+
 tasks.test {
     useJUnitPlatform()
 }
