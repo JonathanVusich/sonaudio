@@ -31,7 +31,7 @@ final class PolyphaseSynthesis {
      * Synthesizes 32 samples from each instant's 32 subband samples: a Layer III granule's 18 instants, or a Layer I
      * or II frame's 12 or 36.
      */
-    void synthesize(final SubbandSamples subbandSamples, final int instants) {
+    void synthesizeInstants(final SubbandSamples subbandSamples, final int instants) {
         for (var instant = 0; instant < instants; instant++) {
             for (var subband = 0; subband < SUBBANDS; subband++) {
                 input[subband] = subbandSamples.subbandSample(instant, subband) * INPUT_SCALE;

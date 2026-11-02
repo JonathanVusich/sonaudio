@@ -38,7 +38,7 @@ final class Imdct implements SubbandSamples {
     /**
      * Transforms a granule's spectrum, which must have been reordered and had its aliasing reduced.
      */
-    void transform(final Spectrum spectrum, final Windowing windowing) {
+    void transformGranule(final Spectrum spectrum, final Windowing windowing) {
         final var blockType = windowing.blockType();
         final var lowSubbands = windowing.lowSubbands();
         for (var subband = 0; subband < SUBBANDS; subband++) {

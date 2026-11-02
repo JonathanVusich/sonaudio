@@ -2,6 +2,7 @@ package dev.javax.sonaudio.format.mp3;
 
 import java.time.Year;
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -49,7 +50,14 @@ public enum Id3Tag {
         };
     }
 
-    public static Id3Tag fromFrameId(final String frameId) {
-        return TAGS.get(frameId);
+    /**
+     * @return the tag a text frame holds, which Sona keeps under its frame ID when it isn't one of Sona's
+     */
+    static FrameTag frameTag(final String frameId) {
+        final var id3Tag = TAGS.get(frameId);
+        if (id3Tag == null) {
+            return new FrameTag.Unknown(frameId.toLowerCase(Locale.ROOT));
+        }
+        return new FrameTag.Known(id3Tag);
     }
 }

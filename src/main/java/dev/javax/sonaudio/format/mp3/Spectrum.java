@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 /**
  * A granule's 576 frequency lines for one channel: its Huffman-coded values, requantized (ISO/IEC 11172-3 sections
- * 2.4.3.4.4 to 2.4.3.4.7) as FFmpeg's floating-point decoder requantizes them, from its tables, in 32-bit floats. A
+ * 2.4.3.4.4 to 2.4.3.4.7) to 32-bit floats, as FFmpeg's floating-point decoder holds them. A
  * short block's lines are in the order they're coded: by band, then window. The decoder keeps one per channel, and
  * reads each granule into it in place, as it runs for every granule of the file.
  */
@@ -44,7 +44,7 @@ final class Spectrum {
      *
      * @param presentBits how many bits the file has for the channel, from where its scale factors start
      */
-    void read(
+    void readGranule(
             final BitInputStream bits,
             final FrameHeader header,
             final GranuleChannel granuleChannel,
@@ -68,7 +68,7 @@ final class Spectrum {
     /**
      * Makes every line 0, for a granule whose bits start before the stream's main data does.
      */
-    void clear() {
+    void clearLines() {
         Arrays.fill(lines, 0);
         nonZeroEnd = 0;
     }
@@ -106,7 +106,7 @@ final class Spectrum {
             return;
         }
         final var bands = ScaleFactorBands.fromSampleRate(header.sampleRate());
-        final var firstBand = firstShortBand(layout);
+        final var firstBand = layout.firstShortBand();
         var start = Windowing.WINDOWS * bands.shortBandStart(firstBand);
         for (var band = firstBand; band < ScaleFactorBands.SHORT_BANDS; band++) {
             final var width = bands.shortBandWidth(band);
@@ -137,8 +137,8 @@ final class Spectrum {
             for (var butterfly = 0; butterfly < AliasCoefficients.COUNT; butterfly++) {
                 final var below = lines[first - 1 - butterfly];
                 final var above = lines[first + butterfly];
-                final var cs = AliasCoefficients.floatCs(butterfly);
-                final var ca = AliasCoefficients.floatCa(butterfly);
+                final var cs = AliasCoefficients.cs(butterfly);
+                final var ca = AliasCoefficients.ca(butterfly);
                 lines[first - 1 - butterfly] = below * cs - above * ca;
                 lines[first + butterfly] = below * ca + above * cs;
             }
@@ -150,7 +150,7 @@ final class Spectrum {
         final var bands = ScaleFactorBands.fromSampleRate(header.sampleRate());
         final var gain = granuleChannel.globalGain() - GAIN_OFFSET - midSideGain(header);
         final var shift = granuleChannel.scalefacScale() + 1;
-        final var longEnd = longBandsEnd(header, granuleChannel.windowing().layout());
+        final var longEnd = granuleChannel.windowing().layout().longBandCount(header.version());
         for (var band = 0; band < longEnd; band++) {
             final var factor =
                     scaleFactors.longFactor(band) + granuleChannel.preflag() * ScaleFactorTables.pretab(band);
@@ -181,7 +181,7 @@ final class Spectrum {
             final int gain,
             final int shift,
             final ScaleFactors scaleFactors) {
-        final var firstBand = firstShortBand(switched.layout());
+        final var firstBand = switched.layout().firstShortBand();
         var line = 3 * bands.shortBandStart(firstBand);
         for (var band = firstBand; band < ScaleFactorBands.SHORT_BANDS; band++) {
             final var width = bands.shortBandWidth(band);
@@ -195,21 +195,6 @@ final class Spectrum {
 
     private void fillExponent(final int start, final int width, final int exponent) {
         Arrays.fill(exponents, start, start + width, exponent + EXPONENT_OFFSET);
-    }
-
-    private static int longBandsEnd(final FrameHeader header, final BlockLayout layout) {
-        return switch (layout) {
-            case LONG -> ScaleFactorBands.LONG_BANDS;
-            case SHORT -> 0;
-            case MIXED -> header.version().mixedLongBands();
-        };
-    }
-
-    private static int firstShortBand(final BlockLayout layout) {
-        return switch (layout) {
-            case LONG, SHORT -> 0;
-            case MIXED -> ScaleFactors.MIXED_FIRST_SHORT_BAND;
-        };
     }
 
     /**

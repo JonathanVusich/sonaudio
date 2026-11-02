@@ -15,6 +15,6 @@ class BitReservoirTest {
         final var header = Mp3Fixtures.header("FFFB1000");
         final var mainData = new ByteArrayInputStream(new byte[header.mainDataSize()]);
 
-        assertThatCode(() -> new BitReservoir().restart(mainData, header)).doesNotThrowAnyException();
+        assertThatCode(() -> new BitReservoir().restartWithFrame(mainData, header)).doesNotThrowAnyException();
     }
 }

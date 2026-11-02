@@ -43,11 +43,7 @@ final class StereoProcessor {
             final ScaleFactors rightFactors) {
         final var bands = ScaleFactorBands.fromSampleRate(header.sampleRate());
         final var layout = rightChannel.windowing().layout();
-        final var longBands = switch (layout) {
-            case LONG -> ScaleFactorBands.LONG_BANDS;
-            case SHORT -> 0;
-            case MIXED -> header.version().mixedLongBands();
-        };
+        final var longBands = layout.longBandCount(header.version());
         var shortBandsCoded = false;
         if (layout != BlockLayout.LONG) {
             shortBandsCoded = processShortBands(header, bands, left, right, rightChannel, rightFactors);
@@ -78,7 +74,7 @@ final class StereoProcessor {
             final Spectrum right,
             final GranuleChannel rightChannel,
             final ScaleFactors rightFactors) {
-        final var firstBand = firstShortBand(rightChannel.windowing().layout());
+        final var firstBand = rightChannel.windowing().layout().firstShortBand();
         var coded = false;
         for (var window = 0; window < Windowing.WINDOWS; window++) {
             final var firstIntensityBand = firstIntensityShortBand(bands, right, firstBand, window);
@@ -184,13 +180,6 @@ final class StereoProcessor {
     // Before reordering, each short band holds its windows one after another.
     private static int shortLineStart(final ScaleFactorBands bands, final int band, final int window) {
         return Windowing.WINDOWS * bands.shortBandStart(band) + window * bands.shortBandWidth(band);
-    }
-
-    private static int firstShortBand(final BlockLayout layout) {
-        return switch (layout) {
-            case LONG, SHORT -> 0;
-            case MIXED -> ScaleFactors.MIXED_FIRST_SHORT_BAND;
-        };
     }
 
     // Whether a band is in the right channel's coded part, or above it, where the right channel is all 0.

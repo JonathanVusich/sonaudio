@@ -54,7 +54,7 @@ final class BitReservoir {
      *
      * @param input the frame's stream, at its main data
      */
-    void restart(final InputStream input, final FrameHeader header) throws IOException {
+    void restartWithFrame(final InputStream input, final FrameHeader header) throws IOException {
         StreamUtils.readFully(input, bytes, 0, header.mainDataSize());
         size = header.mainDataSize();
         keepLast(Math.min(BACKSTEP, size));
@@ -95,7 +95,7 @@ final class BitReservoir {
      * @param bitOffset how many bits after the frame's granules start to read from
      * @return how many bits the file has from there to the end of the frame's main data
      */
-    int presentBitsAt(final Mp3Frame frame, final int bitOffset) {
+    int presentGranuleBits(final Mp3Frame frame, final int bitOffset) {
         final var position = frame.granulesStart() * Byte.SIZE + bitOffset;
         if (position < (size - frame.header().mainDataSize()) * Byte.SIZE) {
             return Integer.MAX_VALUE;
@@ -107,7 +107,7 @@ final class BitReservoir {
      * @param bitOffset how many bits after the frame's granules start to read from, which must be in the reservoir
      * @return the reservoir's bits from there, then zeros
      */
-    BitInputStream bitsAt(final Mp3Frame frame, final int bitOffset) throws IOException {
+    BitInputStream granuleBits(final Mp3Frame frame, final int bitOffset) throws IOException {
         final var position = frame.granulesStart() * Byte.SIZE + bitOffset;
         final var start = position / Byte.SIZE;
         final var bits = BitInputStream.wrap(

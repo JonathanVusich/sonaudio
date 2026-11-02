@@ -29,7 +29,7 @@ final class FloatSignalReader {
     /**
      * @return at most {@code maxSamples} samples
      */
-    int[] read(final FloatPcmAudio audio) throws IOException, InvalidFormatException {
+    int[] readSignal(final FloatPcmAudio audio) throws IOException, InvalidFormatException {
         if (!audio.hasNextFrame()) {
             return new int[0];
         }

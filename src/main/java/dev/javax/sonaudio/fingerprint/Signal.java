@@ -42,7 +42,7 @@ public final class Signal {
      * @throws InvalidFormatException when the audio is corrupt
      */
     public Signal(final FloatPcmAudio audio) throws IOException, InvalidFormatException {
-        this.samples = new FloatSignalReader(MAX_SAMPLES).read(audio);
+        this.samples = new FloatSignalReader(MAX_SAMPLES).readSignal(audio);
     }
 
     public int sampleCount() {
