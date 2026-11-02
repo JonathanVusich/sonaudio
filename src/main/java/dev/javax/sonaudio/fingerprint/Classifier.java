@@ -23,7 +23,7 @@ public record Classifier(
     /**
      * @return 0 to 3, as the filter's response at that row rises
      */
-    public int classify(final IntegralImage image, final int row) {
+    public int classifyRow(final IntegralImage image, final int row) {
         final var response = shape.response(image, row, firstBand, rows, bands);
         if (response < lowThreshold) {
             return 0;

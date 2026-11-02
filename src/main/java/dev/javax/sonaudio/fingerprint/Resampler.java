@@ -121,12 +121,12 @@ public final class Resampler {
             return outputSample(input, start, index, fraction);
         }
         for (var i = 0; i < filterStride; i++) {
-            window[i] = extended(input, length, start + i);
+            window[i] = extendedSample(input, length, start + i);
         }
         return outputSample(window, 0, index, fraction);
     }
 
-    private static float extended(final float[] input, final int length, final int position) {
+    private static float extendedSample(final float[] input, final int length, final int position) {
         var source = position;
         if (position < 0) {
             source = -position;
@@ -147,7 +147,7 @@ public final class Resampler {
     // One output sample: the filter for this phase applied to the samples from offset on.
     private float outputSample(final float[] samples, final int offset, final int index, final int fraction) {
         final var row = filterStride * index;
-        final var sum = filtered(samples, offset, row, filterLength);
+        final var sum = filteredSum(samples, offset, row, filterLength);
         if (incrementRemainder != 0 || fraction != 0) {
             return interpolatedSample(samples, offset, row, fraction, sum);
         }
@@ -157,14 +157,14 @@ public final class Resampler {
     // The sums of this phase's filter and the next one's, blended by how far between the two the output falls.
     private float interpolatedSample(
             final float[] samples, final int offset, final int row, final int fraction, final double sum) {
-        final var next = filtered(samples, offset, row + filterStride, filterStride);
+        final var next = filteredSum(samples, offset, row + filterStride, filterStride);
         final var weight = (double) fraction / sourceIncrement;
         return (float) (sum + (next - sum) * weight);
     }
 
     // The filter's taps applied to the samples from offset on. The next phase's filter is summed to the end of its
     // padding, as the last phase's shifted copy of the first has a tap there.
-    private double filtered(final float[] samples, final int offset, final int row, final int tapCount) {
+    private double filteredSum(final float[] samples, final int offset, final int row, final int tapCount) {
         var sum = 0.0;
         for (var i = 0; i < tapCount; i++) {
             sum += (double) samples[offset + i] * filterBank[row + i];
@@ -281,10 +281,10 @@ public final class Resampler {
             return 1.0;
         }
         final var y = Math.abs(x) * Math.abs(x);
-        return evaluate(BESSEL_NUMERATOR, y) / evaluate(BESSEL_DENOMINATOR, y);
+        return evaluatePolynomial(BESSEL_NUMERATOR, y) / evaluatePolynomial(BESSEL_DENOMINATOR, y);
     }
 
-    private static double evaluate(final double[] coefficients, final double x) {
+    private static double evaluatePolynomial(final double[] coefficients, final double x) {
         var sum = coefficients[coefficients.length - 1];
         for (var i = coefficients.length - 2; i >= 0; i--) {
             sum *= x;

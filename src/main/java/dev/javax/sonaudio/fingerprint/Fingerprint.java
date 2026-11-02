@@ -128,7 +128,7 @@ public final class Fingerprint {
         for (var row = 0; row < count; row++) {
             var bits = 0;
             for (final var classifier : CLASSIFIERS) {
-                bits = (bits << 2) | GRAY_CODE[classifier.classify(image, row)];
+                bits = (bits << 2) | GRAY_CODE[classifier.classifyRow(image, row)];
             }
             subFingerprints[row] = bits;
         }
