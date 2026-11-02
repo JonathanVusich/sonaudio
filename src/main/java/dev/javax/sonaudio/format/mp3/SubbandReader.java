@@ -195,7 +195,7 @@ final class SubbandReader {
             final var quantizationClass = classes[channel][subband];
             final var steps = STEPS[quantizationClass];
             final var sampleBits = SAMPLE_BITS[quantizationClass];
-            var grouped = sampleBits < 0 ? bits.readBits(-sampleBits) : 0;
+            var grouped = readGroupedSamples(bits, sampleBits);
             for (var sample = 0; sample < GROUP; sample++) {
                 final int value;
                 if (sampleBits < 0) {
@@ -210,6 +210,14 @@ final class SubbandReader {
                 }
             }
         }
+    }
+
+    // A class whose sample bits are negative codes its three samples together in that many bits.
+    private long readGroupedSamples(final BitInputStream bits, final int sampleBits) throws IOException {
+        if (sampleBits >= 0) {
+            return 0;
+        }
+        return bits.readBits(-sampleBits);
     }
 
     // The channels a channel's sample goes to: in joint stereo, from the bound up, the left channel's goes to both.

@@ -79,9 +79,11 @@ final class BitReservoir {
             return;
         }
         // The old bytes FFmpeg keeps only when there are no more than 512 of them.
-        final var oldBytes = frameStart - end;
-        final var start = oldBytes <= BACKSTEP ? end : frameStart;
-        keepLast(size - start);
+        if (frameStart - end <= BACKSTEP) {
+            keepLast(size - end);
+            return;
+        }
+        keepLast(size - frameStart);
     }
 
     private void keepLast(final int count) {
