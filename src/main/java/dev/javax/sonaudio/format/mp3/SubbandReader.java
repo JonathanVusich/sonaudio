@@ -62,6 +62,18 @@ final class SubbandReader {
     void readLayerI(final BitInputStream bits, final FrameHeader header) throws IOException {
         final var channelCount = header.channelCount();
         final var bound = bound(header, SUBBANDS);
+        readLayerIAllocations(bits, channelCount, bound);
+        readLayerIScaleFactors(bits, channelCount);
+        for (var instant = 0; instant < PART_INSTANTS; instant++) {
+            for (var subband = 0; subband < SUBBANDS; subband++) {
+                readLayerISample(bits, channelCount, bound, instant, subband);
+            }
+        }
+    }
+
+    // From the bound up, the channels share the left channel's allocation.
+    private void readLayerIAllocations(final BitInputStream bits, final int channelCount, final int bound)
+            throws IOException {
         for (var subband = 0; subband < SUBBANDS; subband++) {
             for (var channel = 0; channel < channelCount; channel++) {
                 if (subband < bound || channel == 0) {
@@ -71,16 +83,14 @@ final class SubbandReader {
                 }
             }
         }
+    }
+
+    private void readLayerIScaleFactors(final BitInputStream bits, final int channelCount) throws IOException {
         for (var subband = 0; subband < SUBBANDS; subband++) {
             for (var channel = 0; channel < channelCount; channel++) {
                 if (allocations[channel][subband] != 0) {
                     scaleFactors[channel][subband][0] = (int) bits.readBits(SCALE_FACTOR_BITS);
                 }
-            }
-        }
-        for (var instant = 0; instant < PART_INSTANTS; instant++) {
-            for (var subband = 0; subband < SUBBANDS; subband++) {
-                readLayerISample(bits, channelCount, bound, instant, subband);
             }
         }
     }
@@ -116,30 +126,8 @@ final class SubbandReader {
         final var table = AllocationTable.of(header);
         final var subbandLimit = table.subbandLimit();
         final var bound = bound(header, subbandLimit);
-        for (var subband = 0; subband < subbandLimit; subband++) {
-            for (var channel = 0; channel < channelCount; channel++) {
-                if (subband < bound || channel == 0) {
-                    allocations[channel][subband] = (int) bits.readBits(table.allocationBits(subband));
-                } else {
-                    allocations[channel][subband] = allocations[0][subband];
-                }
-                classes[channel][subband] = table.quantizationClass(subband, allocations[channel][subband]);
-            }
-        }
-        for (var subband = 0; subband < subbandLimit; subband++) {
-            for (var channel = 0; channel < channelCount; channel++) {
-                if (allocations[channel][subband] != 0) {
-                    selections[channel][subband] = (int) bits.readBits(2);
-                }
-            }
-        }
-        for (var subband = 0; subband < subbandLimit; subband++) {
-            for (var channel = 0; channel < channelCount; channel++) {
-                if (allocations[channel][subband] != 0) {
-                    readScaleFactors(bits, scaleFactors[channel][subband], selections[channel][subband]);
-                }
-            }
-        }
+        readLayerIIAllocations(bits, table, channelCount, bound);
+        readLayerIIScaleFactors(bits, subbandLimit, channelCount);
         for (var channel = 0; channel < channelCount; channel++) {
             Arrays.fill(samples[channel], 0);
         }
@@ -153,10 +141,47 @@ final class SubbandReader {
         }
     }
 
+    // From the bound up, the channels share the left channel's allocation.
+    private void readLayerIIAllocations(
+            final BitInputStream bits, final AllocationTable table, final int channelCount, final int bound)
+            throws IOException {
+        for (var subband = 0; subband < table.subbandLimit(); subband++) {
+            for (var channel = 0; channel < channelCount; channel++) {
+                if (subband < bound || channel == 0) {
+                    allocations[channel][subband] = (int) bits.readBits(table.allocationBits(subband));
+                } else {
+                    allocations[channel][subband] = allocations[0][subband];
+                }
+                classes[channel][subband] = table.quantizationClass(subband, allocations[channel][subband]);
+            }
+        }
+    }
+
+    // Every allocated subband's scale factor selection comes first, then their scale factors.
+    private void readLayerIIScaleFactors(final BitInputStream bits, final int subbandLimit, final int channelCount)
+            throws IOException {
+        for (var subband = 0; subband < subbandLimit; subband++) {
+            for (var channel = 0; channel < channelCount; channel++) {
+                if (allocations[channel][subband] != 0) {
+                    selections[channel][subband] = (int) bits.readBits(2);
+                }
+            }
+        }
+        for (var subband = 0; subband < subbandLimit; subband++) {
+            for (var channel = 0; channel < channelCount; channel++) {
+                if (allocations[channel][subband] != 0) {
+                    readSubbandScaleFactors(bits, channel, subband);
+                }
+            }
+        }
+    }
+
     // The scale factor selection says which of the three parts share a scale factor: none, the first two, all three,
     // or the last two.
-    private static void readScaleFactors(final BitInputStream bits, final int[] factors, final int selection)
+    private void readSubbandScaleFactors(final BitInputStream bits, final int channel, final int subband)
             throws IOException {
+        final var factors = scaleFactors[channel][subband];
+        final var selection = selections[channel][subband];
         factors[0] = (int) bits.readBits(SCALE_FACTOR_BITS);
         switch (selection) {
             case 0 -> {

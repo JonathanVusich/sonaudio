@@ -110,16 +110,20 @@ final class Spectrum {
         var start = Windowing.WINDOWS * bands.shortBandStart(firstBand);
         for (var band = firstBand; band < ScaleFactorBands.SHORT_BANDS; band++) {
             final var width = bands.shortBandWidth(band);
-            for (var line = 0; line < width; line++) {
-                for (var window = 0; window < Windowing.WINDOWS; window++) {
-                    reorderBuffer[Windowing.WINDOWS * line + window] = lines[start + window * width + line];
-                }
-            }
-            System.arraycopy(reorderBuffer, 0, lines, start, Windowing.WINDOWS * width);
+            reorderShortBand(start, width);
             start += Windowing.WINDOWS * width;
         }
         // Lines move up from the windows above, so any may now not be 0.
         nonZeroEnd = LINES;
+    }
+
+    private void reorderShortBand(final int start, final int width) {
+        for (var line = 0; line < width; line++) {
+            for (var window = 0; window < Windowing.WINDOWS; window++) {
+                reorderBuffer[Windowing.WINDOWS * line + window] = lines[start + window * width + line];
+            }
+        }
+        System.arraycopy(reorderBuffer, 0, lines, start, Windowing.WINDOWS * width);
     }
 
     /**
@@ -133,15 +137,21 @@ final class Spectrum {
             case SHORT -> 0;
         };
         for (var boundary = 1; boundary <= boundaries; boundary++) {
-            final var first = SUBBAND_LINES * boundary;
-            for (var butterfly = 0; butterfly < AliasCoefficients.COUNT; butterfly++) {
-                final var below = lines[first - 1 - butterfly];
-                final var above = lines[first + butterfly];
-                final var cs = AliasCoefficients.cs(butterfly);
-                final var ca = AliasCoefficients.ca(butterfly);
-                lines[first - 1 - butterfly] = below * cs - above * ca;
-                lines[first + butterfly] = below * ca + above * cs;
-            }
+            reduceBoundaryAliasing(SUBBAND_LINES * boundary);
+        }
+    }
+
+    /**
+     * @param first the first line above the boundary
+     */
+    private void reduceBoundaryAliasing(final int first) {
+        for (var butterfly = 0; butterfly < AliasCoefficients.COUNT; butterfly++) {
+            final var below = lines[first - 1 - butterfly];
+            final var above = lines[first + butterfly];
+            final var cs = AliasCoefficients.cs(butterfly);
+            final var ca = AliasCoefficients.ca(butterfly);
+            lines[first - 1 - butterfly] = below * cs - above * ca;
+            lines[first + butterfly] = below * ca + above * cs;
         }
     }
 
@@ -150,12 +160,7 @@ final class Spectrum {
         final var bands = ScaleFactorBands.fromSampleRate(header.sampleRate());
         final var gain = granuleChannel.globalGain() - GAIN_OFFSET - midSideGain(header);
         final var shift = granuleChannel.scalefacScale() + 1;
-        final var longEnd = granuleChannel.windowing().layout().longBandCount(header.version());
-        for (var band = 0; band < longEnd; band++) {
-            final var factor =
-                    scaleFactors.longFactor(band) + granuleChannel.preflag() * ScaleFactorTables.pretab(band);
-            fillExponent(bands.longBandStart(band), bands.longBandWidth(band), gain - (factor << shift));
-        }
+        computeLongExponents(header, bands, granuleChannel, scaleFactors, gain);
         switch (granuleChannel.windowing()) {
             case Windowing.Normal _ -> {}
             case Windowing.Switched switched -> {
@@ -163,6 +168,21 @@ final class Spectrum {
                     computeShortExponents(bands, switched, gain, shift, scaleFactors);
                 }
             }
+        }
+    }
+
+    private void computeLongExponents(
+            final FrameHeader header,
+            final ScaleFactorBands bands,
+            final GranuleChannel granuleChannel,
+            final ScaleFactors scaleFactors,
+            final int gain) {
+        final var shift = granuleChannel.scalefacScale() + 1;
+        final var longEnd = granuleChannel.windowing().layout().longBandCount(header.version());
+        for (var band = 0; band < longEnd; band++) {
+            final var factor =
+                    scaleFactors.longFactor(band) + granuleChannel.preflag() * ScaleFactorTables.pretab(band);
+            fillExponent(bands.longBandStart(band), bands.longBandWidth(band), gain - (factor << shift));
         }
     }
 
@@ -230,17 +250,10 @@ final class Spectrum {
         final var region2Band =
                 Math.min(normal.region0Count() + normal.region1Count() + 2, ScaleFactorBands.LONG_BANDS);
         final var region2 = Math.max(Math.min(bands.longBandStart(region2Band), end), region1);
-        final var region0Bits = readRegion(bits, HuffmanTables.bigValueTable(normal.table0()), 0, region1, available);
-        final var region1Bits = readRegion(
-                bits, HuffmanTables.bigValueTable(normal.table1()), region1, region2, available - region0Bits);
-        return region0Bits
-                + region1Bits
-                + readRegion(
-                        bits,
-                        HuffmanTables.bigValueTable(normal.table2()),
-                        region2,
-                        end,
-                        available - region0Bits - region1Bits);
+        final var region0Bits = readRegion(bits, normal.table0(), 0, region1, available);
+        final var region1Bits = readRegion(bits, normal.table1(), region1, region2, available - region0Bits);
+        final var region2Bits = readRegion(bits, normal.table2(), region2, end, available - region0Bits - region1Bits);
+        return region0Bits + region1Bits + region2Bits;
     }
 
     // The first region takes 8 long bands, or 3 short bands of three windows, and the second takes the rest.
@@ -256,16 +269,16 @@ final class Spectrum {
             case NORMAL, START, STOP -> bands.longBandStart(8);
         };
         final var region1 = Math.min(region1Start, end);
-        final var region0Bits = readRegion(bits, HuffmanTables.bigValueTable(switched.table0()), 0, region1, available);
-        return region0Bits
-                + readRegion(
-                        bits, HuffmanTables.bigValueTable(switched.table1()), region1, end, available - region0Bits);
+        final var region0Bits = readRegion(bits, switched.table0(), 0, region1, available);
+        final var region1Bits = readRegion(bits, switched.table1(), region1, end, available - region0Bits);
+        return region0Bits + region1Bits;
     }
 
     // Each codeword codes a pair of values, x and y. A pair is read whole when it starts before the bits run out.
     private int readRegion(
-            final BitInputStream bits, final BigValueTable table, final int start, final int end, final int available)
+            final BitInputStream bits, final int tableSelect, final int start, final int end, final int available)
             throws IOException {
+        final var table = HuffmanTables.bigValueTable(tableSelect);
         var bitsRead = 0;
         for (var line = start; line < end && bitsRead < available; line += 2) {
             final var pair = table.code().readValue(bits);
@@ -323,14 +336,19 @@ final class Spectrum {
                 break;
             }
             code.readValue(bits);
-            for (var value = 0; value < QUAD; value++) {
-                lines[line + value] = readCount1Value(bits, quad >> (QUAD - 1 - value) & 1, line + value);
-            }
+            readQuad(bits, quad, line);
             left -= quadBits;
             presentLeft -= quadBits;
             line += QUAD;
         }
         return line;
+    }
+
+    // The quadruple's bits are its values, the first the highest.
+    private void readQuad(final BitInputStream bits, final int quad, final int start) throws IOException {
+        for (var value = 0; value < QUAD; value++) {
+            lines[start + value] = readCount1Value(bits, quad >> (QUAD - 1 - value) & 1, start + value);
+        }
     }
 
     private float readCount1Value(final BitInputStream bits, final int magnitude, final int line) throws IOException {
