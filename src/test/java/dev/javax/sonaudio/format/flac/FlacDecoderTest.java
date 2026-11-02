@@ -37,7 +37,7 @@ class FlacDecoderTest {
             final var decoded = decodeAll(decoder);
 
             assertThat(decoded.samples()).isEqualTo(streamInfo.interChannelSamples());
-            assertThat(decoded.md5()).isEqualTo(streamInfo.checksum().getChecksum());
+            assertThat(decoded.md5()).isEqualTo(streamInfo.checksum().checksum());
         }
     }
 
@@ -54,7 +54,7 @@ class FlacDecoderTest {
         final var decoded = decodeAll(decoder);
 
         assertThat(decoded.samples()).isEqualTo(original.streamInfo().interChannelSamples());
-        assertThat(decoded.md5()).isEqualTo(original.streamInfo().checksum().getChecksum());
+        assertThat(decoded.md5()).isEqualTo(original.streamInfo().checksum().checksum());
     }
 
     @Test
@@ -211,7 +211,7 @@ class FlacDecoderTest {
         try (final var inputStream = sample.inputStream()) {
             // Leaves the stream at the first frame.
             final var streamInfo =
-                    new FlacParser().parseAllMetadata(inputStream).streamInfo().orElseThrow();
+                    new FlacParser().parseAllMetadata(inputStream).streamInfo();
             final var output = new ByteArrayOutputStream();
             final var dataOutputStream = new DataOutputStream(output);
             final var writer = new FlacWriter();

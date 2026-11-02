@@ -113,7 +113,7 @@ public final class FlacWriter implements Writer {
         bitOutputStream.writeBits(streamInfo.interChannelSamples(), 36);
         bitOutputStream.flush();
 
-        outputStream.write(streamInfo.checksum().getChecksum());
+        outputStream.write(streamInfo.checksum().checksum());
     }
 
     private void writePadding(final DataOutputStream outputStream, final Padding padding) throws IOException {

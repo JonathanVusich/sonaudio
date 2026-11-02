@@ -43,7 +43,7 @@ class FlacWriterTest {
     @Test
     void rejectBinaryTags() {
         final var builder = new RawMetadataBuilder(Duration.ofSeconds(1));
-        builder.addTag(Tag.TRACK_TITLE, new TagValue.Binary(Blob.copyOf(new byte[] {1})));
+        builder.addTag(Tag.TRACK_TITLE, new TagValue.Binary(new Blob(new byte[] {1})));
         final var metadata = builder.build();
 
         assertThatThrownBy(() -> writeFlac(metadata)).isInstanceOf(IllegalArgumentException.class);

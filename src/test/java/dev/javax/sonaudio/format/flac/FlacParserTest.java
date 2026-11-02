@@ -174,8 +174,9 @@ class FlacParserTest {
 
     @Test
     void writtenBlocksParseBackUnchanged() throws IOException, InvalidFormatException {
+        final var streamInfo = streamInfo(blockHeader(BlockType.STREAM_INFO));
         final var blocks = new Block[] {
-            streamInfo(blockHeader(BlockType.STREAM_INFO)),
+            streamInfo,
             new SeekTable(blockHeader(BlockType.SEEK_TABLE), List.of(new SeekPoint(0, 0, (short) 4096))),
             vorbisComment(blockHeader(BlockType.VORBIS_COMMENT), new Field("TITLE", "Round Trip")),
             new Application(blockHeader(BlockType.APPLICATION), 0x52494646, new byte[] {1, 2, 3, 4}),
@@ -199,8 +200,9 @@ class FlacParserTest {
         assertThat(read)
                 .usingRecursiveComparison()
                 .ignoringFieldsMatchingRegexes(".*header\\.size")
-                .isEqualTo(new FlacMetadata(Arrays.stream(blocks)
-                        .collect(groupingBy(block -> block.header().blockType()))));
+                .isEqualTo(new FlacMetadata(
+                        streamInfo,
+                        Arrays.stream(blocks).collect(groupingBy(block -> block.header().blockType()))));
         assertThat(read.metadataBlocks()
                         .get(BlockType.PADDING)
                         .getFirst()

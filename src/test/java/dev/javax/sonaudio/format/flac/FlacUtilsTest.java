@@ -23,7 +23,7 @@ class FlacUtilsTest {
 
     @Test
     void toFieldsRefusesBinaryValues() {
-        final var values = Set.<TagValue>of(new TagValue.Binary(Blob.copyOf(new byte[] {1})));
+        final var values = Set.<TagValue>of(new TagValue.Binary(new Blob(new byte[] {1})));
 
         assertThatThrownBy(() -> FlacUtils.toFields("picture", values).toList())
                 .isInstanceOf(IllegalArgumentException.class);
