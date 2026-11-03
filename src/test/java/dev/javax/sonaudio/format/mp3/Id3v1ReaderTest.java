@@ -2,12 +2,12 @@ package dev.javax.sonaudio.format.mp3;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.javax.sonaudio.format.mp3.Id3Frame.TextFrame;
+import dev.javax.sonaudio.samples.Mp3Sample;
 import java.io.IOException;
 import java.nio.channels.Channels;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import dev.javax.sonaudio.format.mp3.Id3Frame.TextFrame;
-import dev.javax.sonaudio.samples.Mp3Sample;
 
 class Id3v1ReaderTest {
 

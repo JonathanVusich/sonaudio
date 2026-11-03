@@ -2,11 +2,11 @@ package dev.javax.sonaudio.format.mp3;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 class ScaleFactorBandsTest {
 

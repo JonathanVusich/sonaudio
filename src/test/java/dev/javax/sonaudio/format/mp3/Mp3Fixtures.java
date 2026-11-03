@@ -1,11 +1,8 @@
 package dev.javax.sonaudio.format.mp3;
 
-import dev.javax.bitstream.BitInputStream;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.nio.ByteOrder;
+import dev.javax.sonaudio.format.mp3.ParsedHeader.HeaderFound;
+import dev.javax.sonaudio.format.mp3.ParsedHeader.NoHeader;
 import java.util.HexFormat;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 /**
  * Builds the decoder's per-frame objects for tests.
@@ -15,12 +12,13 @@ final class Mp3Fixtures {
     private Mp3Fixtures() {}
 
     /**
-     * @param hex the header's four bytes, read as the parser reads a frame's
+     * @param hex the header's four bytes, parsed as the parser parses a frame's
      */
-    static FrameHeader header(final String hex) throws IOException, InvalidFormatException {
-        final var bytes = HexFormat.of().parseHex(hex);
-        return new Mp3Parser()
-                .readAudioFrameHeader(BitInputStream.wrap(new ByteArrayInputStream(bytes), ByteOrder.BIG_ENDIAN));
+    static FrameHeader header(final String hex) {
+        return switch (FrameHeaderUtils.parseHeader(HexFormat.fromHexDigitsToLong(hex))) {
+            case HeaderFound found -> found.header();
+            case NoHeader _ -> throw new AssertionError(hex + " isn't a frame header");
+        };
     }
 
     /**

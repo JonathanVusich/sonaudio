@@ -1,9 +1,11 @@
 package dev.javax.sonaudio.fingerprint;
 
-import java.util.Arrays;
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.FloatPcmAudio;
 import dev.javax.sonaudio.format.FloatPcmFrame;
 import dev.javax.sonaudio.format.FrameContinuity;
+import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * Brings audio a decoder made in floating point to Chromaprint's 16-bit mono samples at 11025 Hz, as {@code fpcalc}
@@ -27,38 +29,50 @@ final class FloatSignalReader {
     /**
      * @return at most {@code maxSamples} samples
      */
-    int[] read(final FloatPcmAudio audio) {
-        final var rest = audio.iterator();
-        if (!rest.hasNext()) {
+    int[] readSignal(final FloatPcmAudio audio) throws IOException, InvalidFormatException {
+        if (!audio.hasNextFrame()) {
             return new int[0];
         }
-        final var first = rest.next();
+        final var first = audio.nextFrame();
         if (first.continuity() == FrameContinuity.AFTER_DECODING_ERROR) {
             return new int[0];
         }
+        final var stretches = readStretches(audio, first);
+        return toSixteenBits(stretches);
+    }
+
+    /**
+     * @return each stretch of the audio resampled to mono, as far as the signal needs, and stopping at a frame after
+     *     one the decoder dropped
+     */
+    private float[][] readStretches(final FloatPcmAudio audio, final FloatPcmFrame first)
+            throws IOException, InvalidFormatException {
         var stretch = new Stretch(first.sampleRate(), first.channelCount());
         var finished = new float[0][];
         var finishedCount = 0;
         var frame = first;
         while (true) {
             if (frame.sampleRate() != stretch.sampleRate() || frame.channelCount() != stretch.channelCount()) {
-                finished = Arrays.copyOf(finished, finished.length + 1);
-                finished[finished.length - 1] = stretch.resampled();
-                finishedCount += finished[finished.length - 1].length;
+                final var resampled = stretch.resampledMono();
+                finished = appended(finished, resampled);
+                finishedCount += resampled.length;
                 stretch = new Stretch(frame.sampleRate(), frame.channelCount());
             }
-            stretch.add(frame);
-            if (finishedCount + stretch.outputEstimate() >= maxSamples + MARGIN || !rest.hasNext()) {
-                break;
+            stretch.addFrame(frame);
+            if (finishedCount + stretch.outputEstimate() >= maxSamples + MARGIN || !audio.hasNextFrame()) {
+                return appended(finished, stretch.resampledMono());
             }
-            frame = rest.next();
+            frame = audio.nextFrame();
             if (frame.continuity() == FrameContinuity.AFTER_DECODING_ERROR) {
-                break;
+                return appended(finished, stretch.resampledMono());
             }
         }
-        finished = Arrays.copyOf(finished, finished.length + 1);
-        finished[finished.length - 1] = stretch.resampled();
-        return toSixteenBits(finished);
+    }
+
+    private float[][] appended(final float[][] stretches, final float[] stretch) {
+        final var longer = Arrays.copyOf(stretches, stretches.length + 1);
+        longer[stretches.length] = stretch;
+        return longer;
     }
 
     private int[] toSixteenBits(final float[][] stretches) {
@@ -105,7 +119,7 @@ final class FloatSignalReader {
             return (long) length * SAMPLE_RATE / sampleRate;
         }
 
-        void add(final FloatPcmFrame frame) {
+        void addFrame(final FloatPcmFrame frame) {
             if (length + frame.sampleCount() > channels[0].length) {
                 final var size = Math.max(channels[0].length * 2, length + frame.sampleCount());
                 for (var channel = 0; channel < channelCount; channel++) {
@@ -120,12 +134,12 @@ final class FloatSignalReader {
             length += frame.sampleCount();
         }
 
-        float[] resampled() {
+        float[] resampledMono() {
             final var resampled = new float[channelCount][];
             for (var channel = 0; channel < channelCount; channel++) {
                 resampled[channel] = resampledChannel(channels[channel]);
             }
-            return mixed(resampled);
+            return SignalUtils.mixedDown(resampled, resampled[0].length);
         }
 
         private float[] resampledChannel(final float[] samples) {
@@ -133,29 +147,6 @@ final class FloatSignalReader {
                 return Arrays.copyOf(samples, length);
             }
             return new Resampler(sampleRate, SAMPLE_RATE).resampleEnded(samples, length);
-        }
-
-        // swresample's mix to mono: each channel of stereo counts half, and with more channels, an equal share.
-        private float[] mixed(final float[][] resampled) {
-            if (channelCount == 1) {
-                return resampled[0];
-            }
-            final var mono = new float[resampled[0].length];
-            for (var index = 0; index < mono.length; index++) {
-                mono[index] = mixedSample(resampled, index);
-            }
-            return mono;
-        }
-
-        private float mixedSample(final float[][] resampled, final int index) {
-            if (channelCount == 2) {
-                return 0.5f * resampled[0][index] + 0.5f * resampled[1][index];
-            }
-            var sum = 0f;
-            for (var channel = 0; channel < channelCount; channel++) {
-                sum += resampled[channel][index];
-            }
-            return sum / channelCount;
         }
     }
 }

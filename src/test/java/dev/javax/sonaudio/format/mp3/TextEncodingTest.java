@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -11,7 +12,6 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 class TextEncodingTest {
 

@@ -1,9 +1,9 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.IOException;
 import lombok.experimental.UtilityClass;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 @UtilityClass
 final class Id3Utils {

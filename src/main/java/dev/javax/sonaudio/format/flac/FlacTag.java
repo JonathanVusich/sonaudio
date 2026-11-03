@@ -1,5 +1,7 @@
 package dev.javax.sonaudio.format.flac;
 
+import dev.javax.sonaudio.metadata.Tag;
+import dev.javax.sonaudio.metadata.TagValue;
 import java.time.Year;
 import java.util.Arrays;
 import java.util.Map;
@@ -7,8 +9,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import dev.javax.sonaudio.metadata.Tag;
-import dev.javax.sonaudio.metadata.TagValue;
 
 @RequiredArgsConstructor
 @Getter
@@ -28,7 +28,7 @@ public enum FlacTag {
     private final String fieldName;
     private final Tag tag;
 
-    public TagValue toTagValue(String fieldValue) {
+    public TagValue toTagValue(final String fieldValue) {
         return switch (this) {
             case ALBUM_ARTIST, TITLE, ALBUM, ARTIST, COMPOSER -> new TagValue.Str(fieldValue);
             case TRACK_NUMBER, DISC_NUMBER -> new TagValue.Int(Integer.parseInt(fieldValue));
@@ -36,7 +36,14 @@ public enum FlacTag {
         };
     }
 
-    public static FlacTag fromFieldName(String fieldName) {
-        return TAGS.get(fieldName);
+    /**
+     * @param fieldName a Vorbis comment field's name, in lower case
+     */
+    static FieldTag fieldTag(final String fieldName) {
+        final var flacTag = TAGS.get(fieldName);
+        if (flacTag == null) {
+            return new FieldTag.Unknown(fieldName);
+        }
+        return new FieldTag.Known(flacTag);
     }
 }

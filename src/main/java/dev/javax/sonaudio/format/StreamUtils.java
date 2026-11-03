@@ -6,7 +6,7 @@ import java.io.InputStream;
 import lombok.experimental.UtilityClass;
 
 @UtilityClass
-public class StreamUtils {
+public final class StreamUtils {
 
     /**
      * Reads exactly the length into the array from the offset.

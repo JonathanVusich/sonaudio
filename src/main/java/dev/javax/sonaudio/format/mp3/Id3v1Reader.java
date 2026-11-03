@@ -1,13 +1,13 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.format.FieldUtils;
+import dev.javax.sonaudio.format.mp3.Id3Frame.TextFrame;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteOrder;
 import java.util.List;
 import java.util.stream.Stream;
-import dev.javax.sonaudio.format.FieldUtils;
-import dev.javax.sonaudio.format.mp3.Id3Frame.TextFrame;
 
 /**
  * Reads the ID3v1 tag that may end an MP3: 128 bytes of fixed-size fields, which older taggers write. Its fields are

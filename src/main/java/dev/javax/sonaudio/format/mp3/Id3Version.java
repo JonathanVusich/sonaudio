@@ -1,10 +1,10 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.IOException;
 import java.util.Map;
 import java.util.regex.Pattern;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 /**
  * The ID3v2 versions, which lay out the same kinds of frames with different headers, sizes and flags (id3.org's
@@ -161,8 +161,7 @@ enum Id3Version {
         return Synchronisation.SYNCHRONISED;
     }
 
-    private static String readFrameId(final BitInputStream bits, final int size)
-            throws IOException, InvalidFormatException {
+    private String readFrameId(final BitInputStream bits, final int size) throws IOException, InvalidFormatException {
         final var frameId = new StringBuilder(size);
         for (var i = 0; i < size; i++) {
             frameId.append((char) bits.readBits(8));
@@ -183,7 +182,7 @@ enum Id3Version {
         return (int) bits.readBits(8);
     }
 
-    private static long readV23FrameFields(final BitInputStream bits, final int formatFlags) throws IOException {
+    private long readV23FrameFields(final BitInputStream bits, final int formatFlags) throws IOException {
         var inflatedSize = 0L;
         if ((formatFlags & V2_3_COMPRESSED) != 0) {
             inflatedSize = bits.readBits(32);
@@ -194,7 +193,7 @@ enum Id3Version {
         return inflatedSize;
     }
 
-    private static long readV24FrameFields(final BitInputStream bits, final int formatFlags)
+    private long readV24FrameFields(final BitInputStream bits, final int formatFlags)
             throws IOException, InvalidFormatException {
         if ((formatFlags & V2_4_GROUPED) != 0) {
             bits.readBits(8);

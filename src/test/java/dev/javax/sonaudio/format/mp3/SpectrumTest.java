@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.within;
 
 import dev.javax.bitstream.BitInputStream;
 import dev.javax.bitstream.BitOutputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteOrder;
 import org.junit.jupiter.api.Test;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 class SpectrumTest {
 
@@ -52,7 +52,7 @@ class SpectrumTest {
                 new GranuleChannel(71 * 4 + 2, 143, 0, 0, Mp3Fixtures.longBlock(), 0, 0, HuffmanTables.COUNT1_B, 0);
         final var spectrum = new Spectrum();
 
-        spectrum.read(
+        spectrum.readGranule(
                 BitInputStream.wrap(new ByteArrayInputStream(bytes.toByteArray()), ByteOrder.BIG_ENDIAN),
                 Mp3Fixtures.header("FFFB9000"),
                 granuleChannel,
@@ -72,8 +72,8 @@ class SpectrumTest {
 
         spectrum.reduceAliasing(Mp3Fixtures.longBlock());
 
-        final var cs = AliasCoefficients.floatCs(0);
-        final var ca = AliasCoefficients.floatCa(0);
+        final var cs = AliasCoefficients.cs(0);
+        final var ca = AliasCoefficients.ca(0);
         assertThat(spectrum.line(17)).isCloseTo(cs - 2 * ca, within(1e-6f));
         assertThat(spectrum.line(18)).isCloseTo(2 * cs + ca, within(1e-6f));
     }

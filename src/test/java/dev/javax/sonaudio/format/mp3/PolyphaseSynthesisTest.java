@@ -46,7 +46,7 @@ class PolyphaseSynthesisTest {
             }
             final SubbandSamples samples = (_, subband) -> (float) (subbands[subband] * FULL_SCALE);
 
-            synthesis.synthesize(samples, 1);
+            synthesis.synthesizeInstants(samples, 1);
 
             final var expected = textbook(history, subbands);
             for (var sample = 0; sample < SUBBANDS; sample++) {

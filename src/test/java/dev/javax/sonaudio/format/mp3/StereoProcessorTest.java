@@ -3,9 +3,9 @@ package dev.javax.sonaudio.format.mp3;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.IOException;
 import org.junit.jupiter.api.Test;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 class StereoProcessorTest {
 

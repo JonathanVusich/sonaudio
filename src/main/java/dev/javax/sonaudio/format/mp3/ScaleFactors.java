@@ -40,7 +40,7 @@ final class ScaleFactors {
     }
 
     int shortFactor(final int band, final int window) {
-        return factors[shortIndex(band, window)];
+        return factors[ScaleFactorTables.shortIndex(band, window)];
     }
 
     /**
@@ -48,9 +48,5 @@ final class ScaleFactors {
      */
     int part2Length() {
         return part2Length;
-    }
-
-    private static int shortIndex(final int band, final int window) {
-        return ScaleFactorBands.LONG_BANDS + band * Windowing.WINDOWS + window;
     }
 }

@@ -2,30 +2,21 @@ package dev.javax.sonaudio.format.flac;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
-public record FlacMetadata(Map<BlockType, List<Block>> metadataBlocks) {
-
-    /**
-     * @return the stream info block, or empty if the file has none
-     */
-    public Optional<StreamInfo> streamInfo() {
-        return metadataBlocks.getOrDefault(BlockType.STREAM_INFO, List.of()).stream()
-                .<StreamInfo>mapMulti((block, streamInfos) -> {
-                    switch (block) {
-                        case StreamInfo streamInfo -> streamInfos.accept(streamInfo);
-                        default -> {}
-                    }
-                })
-                .findFirst();
-    }
+/**
+ * @param streamInfo the STREAMINFO block, which every FLAC file starts with
+ * @param metadataBlocks every metadata block, STREAMINFO's included, by type
+ */
+public record FlacMetadata(StreamInfo streamInfo, Map<BlockType, List<Block>> metadataBlocks) {
 
     public List<VorbisComment> vorbisComments() {
-        return metadataBlocks.getOrDefault(BlockType.VORBIS_COMMENT, List.of()).stream()
+        final var blocks = metadataBlocks.getOrDefault(BlockType.VORBIS_COMMENT, List.of());
+        return blocks.stream()
                 .<VorbisComment>mapMulti((block, comments) -> {
                     switch (block) {
                         case VorbisComment comment -> comments.accept(comment);
-                        default -> {}
+                        // Blocks of the other kinds are filed under their own types.
+                        case Application _, CueSheet _, Padding _, Picture _, SeekTable _, StreamInfo _ -> {}
                     }
                 })
                 .toList();

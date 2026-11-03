@@ -3,17 +3,18 @@ package dev.javax.sonaudio.format.flac;
 import static dev.javax.sonaudio.format.flac.FlacUtils.toFields;
 
 import dev.javax.bitstream.BitOutputStream;
+import dev.javax.sonaudio.format.Format;
+import dev.javax.sonaudio.format.MD5Checksum;
+import dev.javax.sonaudio.format.Writer;
+import dev.javax.sonaudio.metadata.RawMetadata;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Stream;
-import dev.javax.sonaudio.format.Format;
-import dev.javax.sonaudio.format.MD5Checksum;
-import dev.javax.sonaudio.format.Writer;
-import dev.javax.sonaudio.metadata.RawMetadata;
 
 public final class FlacWriter implements Writer {
 
@@ -51,7 +52,7 @@ public final class FlacWriter implements Writer {
      * RawMetadata only knows the duration, so the rest of the stream info is a fixed 16-bit stereo stream at 44.1 kHz.
      * An all-zero MD5 signature means the audio's checksum is unknown (RFC 9639 section 8.2).
      */
-    private static StreamInfo streamInfo(final RawMetadata rawMetadata) {
+    private StreamInfo streamInfo(final RawMetadata rawMetadata) {
         final var header = new BlockHeader(BlockPosition.NOT_LAST, BlockType.STREAM_INFO, STREAM_INFO_SIZE);
         final var samples = rawMetadata.duration().toNanos() * DEFAULT_SAMPLE_RATE / 1_000_000_000L;
         return new StreamInfo(
@@ -67,7 +68,7 @@ public final class FlacWriter implements Writer {
                 samples);
     }
 
-    private static VorbisComment vorbisComment(final RawMetadata rawMetadata) {
+    private VorbisComment vorbisComment(final RawMetadata rawMetadata) {
         final var header = new BlockHeader(BlockPosition.LAST, BlockType.VORBIS_COMMENT, 0);
         final var knownFields = Arrays.stream(FlacTag.values())
                 .flatMap(flacTag -> toFields(flacTag.getFieldName(), rawMetadata.findValues(flacTag.getTag())));
@@ -113,7 +114,7 @@ public final class FlacWriter implements Writer {
         bitOutputStream.writeBits(streamInfo.interChannelSamples(), 36);
         bitOutputStream.flush();
 
-        outputStream.write(streamInfo.checksum().getChecksum());
+        outputStream.write(streamInfo.checksum().checksum());
     }
 
     private void writePadding(final DataOutputStream outputStream, final Padding padding) throws IOException {
@@ -163,32 +164,32 @@ public final class FlacWriter implements Writer {
 
     private void writeCueSheet(final DataOutputStream outputStream, final CueSheet cueSheet) throws IOException {
         final var tracks = cueSheet.tracks();
-        final var tracksSize = tracks.stream()
-                .mapToInt(track -> CUE_SHEET_TRACK_SIZE + track.indexPoints().size() * CUE_SHEET_INDEX_POINT_SIZE)
-                .sum();
-        writeBlockHeader(outputStream, cueSheet.header(), CUE_SHEET_SIZE + tracksSize);
-
+        writeBlockHeader(outputStream, cueSheet.header(), cueSheetSize(tracks));
         writeAscii(outputStream, cueSheet.mediaCatalogNumber(), FlacParser.MEDIA_CATALOG_NUMBER_SIZE);
         outputStream.writeLong(cueSheet.leadInSamples());
-
         final var bitOutputStream = BitOutputStream.wrap(outputStream, ByteOrder.BIG_ENDIAN);
         bitOutputStream.writeBits(cueSheet.medium().ordinal(), 1);
         // Reserved: the rest of this byte plus 258 more
         bitOutputStream.writeBits(0, 7);
         bitOutputStream.flush();
         outputStream.write(new byte[258]);
-
         outputStream.writeByte(tracks.size());
         for (final var track : tracks) {
             writeCueSheetTrack(outputStream, track);
         }
     }
 
+    private int cueSheetSize(final List<CueSheetTrack> tracks) {
+        final var tracksSize = tracks.stream()
+                .mapToInt(track -> CUE_SHEET_TRACK_SIZE + track.indexPoints().size() * CUE_SHEET_INDEX_POINT_SIZE)
+                .sum();
+        return CUE_SHEET_SIZE + tracksSize;
+    }
+
     private void writeCueSheetTrack(final DataOutputStream outputStream, final CueSheetTrack track) throws IOException {
         outputStream.writeLong(track.offset());
         outputStream.writeByte(track.number());
         writeAscii(outputStream, track.isrc(), FlacParser.ISRC_SIZE);
-
         final var bitOutputStream = BitOutputStream.wrap(outputStream, ByteOrder.BIG_ENDIAN);
         bitOutputStream.writeBits(track.trackType().ordinal(), 1);
         bitOutputStream.writeBits(track.preEmphasis().ordinal(), 1);
@@ -196,36 +197,39 @@ public final class FlacWriter implements Writer {
         bitOutputStream.writeBits(0, 6);
         bitOutputStream.flush();
         outputStream.write(new byte[13]);
-
         final var indexPoints = track.indexPoints();
         outputStream.writeByte(indexPoints.size());
         for (final var indexPoint : indexPoints) {
-            outputStream.writeLong(indexPoint.offset());
-            outputStream.writeByte(indexPoint.number());
-            // Reserved
-            outputStream.write(new byte[3]);
+            writeIndexPoint(outputStream, indexPoint);
         }
     }
 
+    private void writeIndexPoint(final DataOutputStream outputStream, final CueSheetIndexPoint indexPoint)
+            throws IOException {
+        outputStream.writeLong(indexPoint.offset());
+        outputStream.writeByte(indexPoint.number());
+        // Reserved
+        outputStream.write(new byte[3]);
+    }
+
+    // Unlike Vorbis comment lengths, picture lengths are big endian.
     private void writePicture(final DataOutputStream outputStream, final Picture picture) throws IOException {
         final var mediaType = picture.mediaType().getBytes(StandardCharsets.US_ASCII);
         final var description = picture.description().getBytes(StandardCharsets.UTF_8);
         final var data = picture.data();
-        final var size = PICTURE_FIELDS_SIZE + mediaType.length + description.length + data.length;
-        writeBlockHeader(outputStream, picture.header(), size);
-
-        // Unlike Vorbis comment lengths, picture lengths are big endian.
+        writeBlockHeader(
+                outputStream,
+                picture.header(),
+                PICTURE_FIELDS_SIZE + mediaType.length + description.length + data.length);
         outputStream.writeInt(picture.pictureType().ordinal());
         outputStream.writeInt(mediaType.length);
         outputStream.write(mediaType);
         outputStream.writeInt(description.length);
         outputStream.write(description);
-
         outputStream.writeInt(picture.width());
         outputStream.writeInt(picture.height());
         outputStream.writeInt(picture.colorDepth());
         outputStream.writeInt(picture.numberOfColors());
-
         outputStream.writeInt(data.length);
         outputStream.write(data);
     }

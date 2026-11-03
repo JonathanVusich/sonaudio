@@ -1,7 +1,7 @@
 package dev.javax.sonaudio.format.mp3;
 
-import java.time.Duration;
 import dev.javax.sonaudio.format.AudioUtils;
+import java.time.Duration;
 
 /**
  * What an MP3's frames hold, as its first frame and VBR header give it.

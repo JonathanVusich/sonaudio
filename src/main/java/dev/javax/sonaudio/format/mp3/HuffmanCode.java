@@ -48,7 +48,7 @@ final class HuffmanCode {
         for (var index = 0; index < values.length; index++) {
             addCodeword(codes[index], lengths[index], values[index]);
         }
-        this.codeLengths = codeLengths(values, lengths);
+        this.codeLengths = HuffmanUtils.valueCodeLengths(values, lengths);
     }
 
     /**
@@ -105,18 +105,6 @@ final class HuffmanCode {
             throw new IllegalArgumentException("Some bit strings start with no codeword");
         }
         return codes;
-    }
-
-    private static int[] codeLengths(final int[] values, final int[] lengths) {
-        var maxValue = 0;
-        for (final var value : values) {
-            maxValue = Math.max(maxValue, value);
-        }
-        final var codeLengths = new int[maxValue + 1];
-        for (var index = 0; index < values.length; index++) {
-            codeLengths[values[index]] = lengths[index];
-        }
-        return codeLengths;
     }
 
     private static int maxLength(final int[] lengths) {

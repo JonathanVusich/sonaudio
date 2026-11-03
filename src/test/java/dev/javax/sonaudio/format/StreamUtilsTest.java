@@ -22,6 +22,7 @@ class StreamUtilsTest {
     void readFullyFailsWhenTheStreamEndsFirst() {
         final var input = new ByteArrayInputStream(new byte[] {1, 2});
 
-        assertThatThrownBy(() -> StreamUtils.readFully(input, new byte[3], 0, 3)).isInstanceOf(EOFException.class);
+        assertThatThrownBy(() -> StreamUtils.readFully(input, new byte[3], 0, 3))
+                .isInstanceOf(EOFException.class);
     }
 }
