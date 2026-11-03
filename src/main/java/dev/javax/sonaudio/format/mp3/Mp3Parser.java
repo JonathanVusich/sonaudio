@@ -9,6 +9,8 @@ import dev.javax.sonaudio.format.mp3.FirstFrame.VbrHeader;
 import dev.javax.sonaudio.format.mp3.Id3Frame.TextFrame;
 import dev.javax.sonaudio.format.mp3.Id3Frame.UniqueFileId;
 import dev.javax.sonaudio.format.mp3.Id3Frame.UserTextFrame;
+import dev.javax.sonaudio.format.mp3.ParsedHeader.HeaderFound;
+import dev.javax.sonaudio.format.mp3.ParsedHeader.NoHeader;
 import dev.javax.sonaudio.metadata.RawMetadata;
 import dev.javax.sonaudio.metadata.RawMetadataBuilder;
 import java.io.BufferedInputStream;
@@ -44,8 +46,6 @@ public final class Mp3Parser implements Parser {
     private static final int HEADER_SIZE = 10;
     private static final int FOOTER_SIZE = 10;
     private static final int FOOTER = 0x10;
-    // A frame header's sync, its first 11 bits.
-    private static final long SYNC = 0xFFE0_0000L;
     // FFmpeg's MP3 demuxer looks this far for the first frame followed by another of its stream.
     private static final int FIRST_FRAME_SEARCH = 64 * 1024;
     // How much of a file FFmpeg reads to find its streams.
@@ -192,7 +192,9 @@ public final class Mp3Parser implements Parser {
      */
     private BoundedInputStream audioStream(final SeekableByteChannel channel, final long audioStart)
             throws IOException {
-        final var file = Channels.newInputStream(channel.position(audioStart));
+        // A sequence closes each stream it reads to the end, and closing a channel's stream closes the channel, which
+        // the parser and the decoder each read the audio from, so the file's stream is one that stays open.
+        final var file = new BoundedInputStream(Channels.newInputStream(channel.position(audioStart)), Long.MAX_VALUE);
         final var zeros = new ByteArrayInputStream(new byte[MAX_FREE_FORMAT_LENGTH]);
         final var padded = new SequenceInputStream(file, zeros);
         return new BoundedInputStream(new BufferedInputStream(padded), Long.MAX_VALUE);
@@ -216,7 +218,8 @@ public final class Mp3Parser implements Parser {
         checkHasFrames(channel, firstFrame, afterVbrHeader, audioEnd);
         final var start = decoderStart(firstFrame, afterVbrHeader);
         final var freeFormat = readFreeFormatLength(channel, start, audioEnd);
-        final var audio = new BoundedInputStream(positionedStream(channel, start), audioEnd - start);
+        // Padded as the decoder's is, so a search for a frame stops where the audio ends rather than the file.
+        final var audio = audioStream(channel, start);
         final var bits = BitInputStream.wrap(audio, ByteOrder.BIG_ENDIAN);
         final var first = switch (findFrame(audio, bits, audioEnd - start, freeFormat)) {
             case FoundFrame found -> found.header();
@@ -373,22 +376,14 @@ public final class Mp3Parser implements Parser {
     }
 
     // The frame header made of four bytes of the file, wherever they are, leaving the channel where it was.
-    private HeaderAt peekHeader(final SeekableByteChannel channel, final long position, final long audioEnd)
+    private ParsedHeader peekHeader(final SeekableByteChannel channel, final long position, final long audioEnd)
             throws IOException {
         if (position + FrameHeader.SIZE > Math.min(audioEnd, channel.size())) {
             return new NoHeader();
         }
-        return parseHeader(peekWord(channel, position));
+        final var word = peekWord(channel, position);
+        return FrameHeaderUtils.parseHeader(word);
     }
-
-    /**
-     * Whether four bytes make a frame header.
-     */
-    private sealed interface HeaderAt permits HeaderFound, NoHeader {}
-
-    private record HeaderFound(FrameHeader header) implements HeaderAt {}
-
-    private record NoHeader() implements HeaderAt {}
 
     private long peekWord(final SeekableByteChannel channel, final long position) throws IOException {
         final var restore = channel.position();
@@ -479,17 +474,6 @@ public final class Mp3Parser implements Parser {
     FrameSearch findFrame(
             final BoundedInputStream audio, final BitInputStream bits, final long audioLength, final int unpaddedLength)
             throws IOException {
-        try {
-            return searchFrame(audio, bits, audioLength, unpaddedLength);
-        } catch (final EOFException end) {
-            return new NoMoreFrames();
-        }
-    }
-
-    // Looks a byte at a time until a header, or the end of the audio.
-    private FrameSearch searchFrame(
-            final BoundedInputStream audio, final BitInputStream bits, final long audioLength, final int unpaddedLength)
-            throws IOException {
         var lead = FrameLead.AFTER_ZEROS;
         while (true) {
             final var word = bits.peekBits(32);
@@ -498,7 +482,8 @@ public final class Mp3Parser implements Parser {
             if (audio.getCount() > audioLength) {
                 return new NoMoreFrames();
             }
-            if (parseHeader(word) instanceof HeaderFound(final var header) && isStreamFrame(header, unpaddedLength)) {
+            if (FrameHeaderUtils.parseHeader(word) instanceof HeaderFound(final var header)
+                    && isStreamFrame(header, unpaddedLength)) {
                 return new FoundFrame(withLength(header, unpaddedLength), lead);
             }
             if (word >>> 24 != 0) {
@@ -547,50 +532,6 @@ public final class Mp3Parser implements Parser {
             return header.withFreeFormatLength(unpaddedLength);
         }
         return header;
-    }
-
-    /**
-     * Reads a frame's header.
-     */
-    FrameHeader readAudioFrameHeader(final BitInputStream bits) throws IOException, InvalidFormatException {
-        return frameHeader(bits.readBits(32));
-    }
-
-    // Bytes that aren't a frame rarely start with a frame sync, so the other fields are only read when they do.
-    private HeaderAt parseHeader(final long header) {
-        if ((header & SYNC) != SYNC) {
-            return new NoHeader();
-        }
-        try {
-            return new HeaderFound(frameHeader(header));
-        } catch (final InvalidFormatException reservedField) {
-            return new NoHeader();
-        }
-    }
-
-    // The header's 32 bits: the sync (11), version (2), layer (2), protection bit, bitrate index (4), sample rate index
-    // (2), padding bit, the encoder's own private bit, channel mode (2) and mode extension (2), then the copyright,
-    // original and emphasis fields. Only Layer III may be in free format, as FFmpeg finds no free-format frames at all.
-    private FrameHeader frameHeader(final long header) throws InvalidFormatException {
-        if ((header & SYNC) != SYNC) {
-            throw new InvalidFormatException("MPEG audio frame doesn't start with a frame sync!");
-        }
-        final var version = MpegVersion.fromBits(field(header, 19, 2));
-        final var layer = Layer.fromBits(field(header, 17, 2));
-        final var protection = Protection.fromBit(field(header, 16, 1));
-        final var bitrate = version.bitrate(layer, field(header, 12, 4));
-        if (bitrate == FrameHeader.FREE_FORMAT_BITRATE && layer != Layer.III) {
-            throw new InvalidFormatException("Free-format Layer I and II frames can't be decoded!");
-        }
-        final var sampleRate = version.sampleRate(field(header, 10, 2));
-        final var padding = field(header, 9, 1);
-        final var channelMode = ChannelMode.values()[field(header, 6, 2)];
-        final var modeExtension = field(header, 4, 2);
-        return new FrameHeader(version, layer, protection, bitrate, sampleRate, padding, channelMode, modeExtension);
-    }
-
-    private int field(final long header, final int shift, final int size) {
-        return (int) (header >>> shift) & ((1 << size) - 1);
     }
 
     /**

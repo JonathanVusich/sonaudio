@@ -1,7 +1,6 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.FloatPcmAudio;
 import dev.javax.sonaudio.format.FloatPcmFrame;
 import dev.javax.sonaudio.format.FrameContinuity;
@@ -18,8 +17,6 @@ import java.util.NoSuchElementException;
  * decodes with it: the frames FFmpeg's parser finds, in Layers I, II and III, with each frame's own channels, as a
  * stream may change between mono and stereo, and FFmpeg's trimming of the encoder's delay and padding a LAME tag gives.
  * Every frame is a {@link FloatPcmFrame} of its own.
- *
- * <p>It throws {@link InvalidFormatException} when a frame's header can't be read.
  *
  * <p>A Layer III frame is read from the file's stream in turn: its header, through the parser, its side information
  * (ISO/IEC 11172-3 section 2.4.1.7, ISO/IEC 13818-3 section 2.4.1.7), and its main data, which may start in the frames
@@ -41,6 +38,8 @@ public final class Mp3Decoder implements FloatPcmAudio {
     private static final int LAYER_II_INSTANTS = 36;
     // A granule has 576 values, so at most 288 pairs.
     private static final int MAX_BIG_VALUES = 288;
+    // A window_switching_flag of 1, then a block_type of 0, which FFmpeg rejects.
+    private static final long SWITCHED_TO_NORMAL_BLOCK = 0b100;
     // MPEG-2's scale factors use pre-emphasis from this scalefac_compress on, except in intensity stereo's right
     // channel.
     private static final int LSF_PREFLAG_COMPRESS = 500;
@@ -116,7 +115,7 @@ public final class Mp3Decoder implements FloatPcmAudio {
     }
 
     @Override
-    public boolean hasNextFrame() throws IOException, InvalidFormatException {
+    public boolean hasNextFrame() throws IOException {
         return switch (peekNextFrame()) {
             case Decoded _ -> true;
             case Undecoded _, Ended _ -> false;
@@ -124,7 +123,7 @@ public final class Mp3Decoder implements FloatPcmAudio {
     }
 
     @Override
-    public FloatPcmFrame nextFrame() throws IOException, InvalidFormatException {
+    public FloatPcmFrame nextFrame() throws IOException {
         return switch (peekNextFrame()) {
             case Decoded(final var frame) -> {
                 nextFrame = new Undecoded();
@@ -134,7 +133,7 @@ public final class Mp3Decoder implements FloatPcmAudio {
         };
     }
 
-    private NextFrame peekNextFrame() throws IOException, InvalidFormatException {
+    private NextFrame peekNextFrame() throws IOException {
         nextFrame = switch (nextFrame) {
             case Undecoded _ -> decodeNextGivenFrame();
             case Decoded _, Ended _ -> nextFrame;
@@ -153,7 +152,7 @@ public final class Mp3Decoder implements FloatPcmAudio {
 
     private record Ended() implements NextFrame {}
 
-    private NextFrame decodeNextGivenFrame() throws IOException, InvalidFormatException {
+    private NextFrame decodeNextGivenFrame() throws IOException {
         final var audioLength = streamInfo.audioEnd() - streamInfo.audioStart();
         while (parser.findFrame(input, bits, audioLength, streamInfo.freeFormatLength())
                 instanceof Mp3Parser.FoundFrame found) {
@@ -169,8 +168,7 @@ public final class Mp3Decoder implements FloatPcmAudio {
     }
 
     // A frame FFmpeg drops gives no samples, and those after it follow a decoding error.
-    private FrameSamples decodeFoundFrame(final Mp3Parser.FoundFrame found, final long audioLength)
-            throws IOException, InvalidFormatException {
+    private FrameSamples decodeFoundFrame(final Mp3Parser.FoundFrame found, final long audioLength) throws IOException {
         final var header = found.header();
         final var position = framePosition;
         framePosition += header.samplesPerFrame();
@@ -257,8 +255,7 @@ public final class Mp3Decoder implements FloatPcmAudio {
      * @return whether it was decoded: FFmpeg drops a Layer III frame whose side information has more big values than a
      *     granule's lines, or switches windows to a normal block
      */
-    private boolean decodeFrame(final FrameHeader header, final int presentBytes)
-            throws IOException, InvalidFormatException {
+    private boolean decodeFrame(final FrameHeader header, final int presentBytes) throws IOException {
         // The CRC isn't checked: a frame that fails it is still decoded, as other decoders do.
         input.skipAvailableBytes(header.protection().crcSize());
         return switch (header.layer()) {
@@ -290,18 +287,24 @@ public final class Mp3Decoder implements FloatPcmAudio {
     // A frame whose side information FFmpeg rejects leaves its main data alone in the reservoir.
     private boolean decodeLayerIII(final FrameHeader header, final int presentBytes) throws IOException {
         final var sideInfoStart = input.getCount();
-        final SideInfo sideInfo;
-        try {
-            sideInfo = readSideInfo(header);
-        } catch (final InvalidFormatException rejected) {
-            bits.alignToByte();
-            input.skipAvailableBytes(sideInfoStart + header.sideInfoSize() - input.getCount());
-            reservoir.restartWithFrame(input, header);
-            return false;
-        }
+        return switch (readSideInfo(header)) {
+            case AcceptedSideInfo(final var sideInfo) -> decodeMainData(header, sideInfo, presentBytes);
+            case RejectedSideInfo _ -> skipRejectedFrame(header, sideInfoStart);
+        };
+    }
+
+    private boolean decodeMainData(final FrameHeader header, final SideInfo sideInfo, final int presentBytes)
+            throws IOException {
         final var frame = reservoir.readMainData(input, header, sideInfo, presentBytes);
         reservoir.keepAfterGranules(frame, decodeGranules(frame));
         return true;
+    }
+
+    private boolean skipRejectedFrame(final FrameHeader header, final long sideInfoStart) throws IOException {
+        bits.alignToByte();
+        input.skipAvailableBytes(sideInfoStart + header.sideInfoSize() - input.getCount());
+        reservoir.restartWithFrame(input, header);
+        return false;
     }
 
     /**
@@ -574,29 +577,66 @@ public final class Mp3Decoder implements FloatPcmAudio {
         return ScaleFactorBands.LONG_BANDS + layout.firstShortBand() * Windowing.WINDOWS + index - longCount;
     }
 
-    private SideInfo readSideInfo(final FrameHeader header) throws IOException, InvalidFormatException {
+    // A granule FFmpeg rejects rejects the frame, so the rest of its side information isn't read.
+    private SideInfoRead readSideInfo(final FrameHeader header) throws IOException {
         final var mainDataBegin = (int) bits.readBits(mainDataBeginBits(header.version()));
         // The private bits are the encoder's own.
         bits.readBits(privateBits(header));
+        final var channelSharing = readChannelSharing(header);
+        final var granules = new ArrayList<List<GranuleChannel>>();
+        for (var granule = 0; granule < header.granuleCount(); granule++) {
+            switch (readGranule(header, granule, channelSharing)) {
+                case AcceptedGranule(final var channels) -> granules.add(channels);
+                case RejectedSideInfo rejected -> {
+                    return rejected;
+                }
+            }
+        }
+        return new AcceptedSideInfo(new SideInfo(mainDataBegin, List.copyOf(granules)));
+    }
+
+    private GranuleRead readGranule(final FrameHeader header, final int granule, final int[] channelSharing)
+            throws IOException {
+        final var channels = new ArrayList<GranuleChannel>();
+        for (var channel = 0; channel < header.channelCount(); channel++) {
+            final var sharing = granuleSharing(granule, channelSharing[channel]);
+            switch (readGranuleChannel(header, channel, sharing)) {
+                case AcceptedChannel(final var granuleChannel) -> channels.add(granuleChannel);
+                case RejectedSideInfo rejected -> {
+                    return rejected;
+                }
+            }
+        }
+        return new AcceptedGranule(List.copyOf(channels));
+    }
+
+    /**
+     * Side information as FFmpeg reads it: accepted, or rejected, which drops its frame.
+     */
+    private sealed interface SideInfoRead permits AcceptedSideInfo, RejectedSideInfo {}
+
+    private sealed interface GranuleRead permits AcceptedGranule, RejectedSideInfo {}
+
+    private sealed interface ChannelRead permits AcceptedChannel, RejectedSideInfo {}
+
+    private record AcceptedSideInfo(SideInfo sideInfo) implements SideInfoRead {}
+
+    private record AcceptedGranule(List<GranuleChannel> channels) implements GranuleRead {}
+
+    private record AcceptedChannel(GranuleChannel channel) implements ChannelRead {}
+
+    /**
+     * A granule's channel has more big values than a granule's lines, or switches windows to a normal block.
+     */
+    private record RejectedSideInfo() implements SideInfoRead, GranuleRead, ChannelRead {}
+
+    // MPEG-1's scfsi, four bits per channel, which only the second granule uses.
+    private int[] readChannelSharing(final FrameHeader header) throws IOException {
         final var channelSharing = new int[header.channelCount()];
         for (var channel = 0; channel < channelSharing.length; channel++) {
             channelSharing[channel] = readChannelSharing(header.version());
         }
-        final var granules = new ArrayList<List<GranuleChannel>>();
-        for (var granule = 0; granule < header.granuleCount(); granule++) {
-            granules.add(readGranule(header, granule, channelSharing));
-        }
-        return new SideInfo(mainDataBegin, List.copyOf(granules));
-    }
-
-    private List<GranuleChannel> readGranule(final FrameHeader header, final int granule, final int[] channelSharing)
-            throws IOException, InvalidFormatException {
-        final var channels = new ArrayList<GranuleChannel>();
-        for (var channel = 0; channel < header.channelCount(); channel++) {
-            final var sharing = granuleSharing(granule, channelSharing[channel]);
-            channels.add(readGranuleChannel(header, channel, sharing));
-        }
-        return List.copyOf(channels);
+        return channelSharing;
     }
 
     private int mainDataBeginBits(final MpegVersion version) {
@@ -647,20 +687,20 @@ public final class Mp3Decoder implements FloatPcmAudio {
      * @param channel 0 for the left or only channel, and 1 for the right
      * @param sharing MPEG-1's scfsi for the second granule, or 0 otherwise
      */
-    private GranuleChannel readGranuleChannel(final FrameHeader header, final int channel, final int sharing)
-            throws IOException, InvalidFormatException {
+    private ChannelRead readGranuleChannel(final FrameHeader header, final int channel, final int sharing)
+            throws IOException {
         final var part23Length = (int) bits.readBits(12);
         final var bigValues = (int) bits.readBits(9);
-        if (bigValues > MAX_BIG_VALUES) {
-            throw new InvalidFormatException("MP3 granule has %d pairs of big values!".formatted(bigValues));
-        }
         final var globalGain = (int) bits.readBits(8);
         final var scalefacCompress = (int) bits.readBits(scalefacCompressBits(header.version()));
+        if (bigValues > MAX_BIG_VALUES || bits.peekBits(3) == SWITCHED_TO_NORMAL_BLOCK) {
+            return new RejectedSideInfo();
+        }
         final var windowing = readWindowing();
         final var preflag = readPreflag(header, channel, scalefacCompress);
         final var scalefacScale = (int) bits.readBits(1);
         final var count1Code = count1Code(bits.readBits(1));
-        return new GranuleChannel(
+        return new AcceptedChannel(new GranuleChannel(
                 part23Length,
                 bigValues,
                 globalGain,
@@ -669,7 +709,7 @@ public final class Mp3Decoder implements FloatPcmAudio {
                 preflag,
                 scalefacScale,
                 count1Code,
-                sharing);
+                sharing));
     }
 
     private int scalefacCompressBits(final MpegVersion version) {
@@ -680,7 +720,7 @@ public final class Mp3Decoder implements FloatPcmAudio {
     }
 
     // The window_switching_flag says which kind follows.
-    private Windowing readWindowing() throws IOException, InvalidFormatException {
+    private Windowing readWindowing() throws IOException {
         if (bits.readBits(1) == 0) {
             return readNormalWindowing();
         }
@@ -696,7 +736,7 @@ public final class Mp3Decoder implements FloatPcmAudio {
         return new Windowing.Normal(table0, table1, table2, region0Count, region1Count);
     }
 
-    private Windowing readSwitchedWindowing() throws IOException, InvalidFormatException {
+    private Windowing readSwitchedWindowing() throws IOException {
         final var blockType = BlockType.fromSwitchedBits((int) bits.readBits(2));
         final var lowSubbands = readLowSubbands();
         final var table0 = readTable();

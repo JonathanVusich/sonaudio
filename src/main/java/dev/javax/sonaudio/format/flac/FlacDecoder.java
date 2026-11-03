@@ -25,9 +25,12 @@ public final class FlacDecoder implements IntPcmAudio {
 
     private static final int SYNC_CODE = 0b11111111111110;
 
-    private static final int LEFT_SIDE = 8;
-    private static final int SIDE_RIGHT = 9;
-    private static final int MID_SIDE = 10;
+    // The channel assignment codes from which a frame's two channels are decorrelated. Those below code one channel
+    // more than the code each, on its own, and those above are reserved.
+    private static final int LEFT_SIDE_CODE = 8;
+    private static final int SIDE_RIGHT_CODE = 9;
+    private static final int MID_SIDE_CODE = 10;
+    private static final int DECORRELATED_CHANNELS = 2;
 
     private final StreamInfo streamInfo;
     private final Crc crc8 = new Crc(0x07, 8);
@@ -91,7 +94,7 @@ public final class FlacDecoder implements IntPcmAudio {
     }
 
     private long[][] readSubframes(final FrameHeader header) throws IOException, InvalidFormatException {
-        final var channels = new long[header.channels()][];
+        final var channels = new long[header.channelCount()][];
         for (var channel = 0; channel < channels.length; channel++) {
             channels[channel] = readSubframe(header.blockSize(), header.subframeBitsPerSample(channel));
         }
@@ -113,14 +116,15 @@ public final class FlacDecoder implements IntPcmAudio {
         bits.readBits(1);
         final var blockSizeCode = (int) bits.readBits(4);
         final var sampleRateCode = (int) bits.readBits(4);
-        final var channelAssignment = readChannelAssignment();
+        final var channelCode = readChannelCode();
         final var bitDepthCode = readBitDepthCode();
         skipCodedNumber();
         final var blockSize = readBlockSize(blockSizeCode);
         final var sampleRate = readSampleRate(sampleRateCode);
         readHeaderCrc();
         final var bitsPerSample = bitDepth(bitDepthCode);
-        final var header = new FrameHeader(blockSize, channelAssignment, bitsPerSample);
+        final var header =
+                new FrameHeader(blockSize, channelAssignment(channelCode), channelCount(channelCode), bitsPerSample);
         checkStreamInfo(header, sampleRate);
         return header;
     }
@@ -131,12 +135,28 @@ public final class FlacDecoder implements IntPcmAudio {
         }
     }
 
-    private int readChannelAssignment() throws IOException, InvalidFormatException {
-        final var channelAssignment = (int) bits.readBits(4);
-        if (channelAssignment > MID_SIDE) {
+    private int readChannelCode() throws IOException, InvalidFormatException {
+        final var channelCode = (int) bits.readBits(4);
+        if (channelCode > MID_SIDE_CODE) {
             throw new InvalidFormatException("FLAC frame header has a reserved channel assignment!");
         }
-        return channelAssignment;
+        return channelCode;
+    }
+
+    private ChannelAssignment channelAssignment(final int channelCode) {
+        return switch (channelCode) {
+            case LEFT_SIDE_CODE -> ChannelAssignment.LEFT_SIDE;
+            case SIDE_RIGHT_CODE -> ChannelAssignment.SIDE_RIGHT;
+            case MID_SIDE_CODE -> ChannelAssignment.MID_SIDE;
+            default -> ChannelAssignment.INDEPENDENT;
+        };
+    }
+
+    private int channelCount(final int channelCode) {
+        if (channelCode < LEFT_SIDE_CODE) {
+            return channelCode + 1;
+        }
+        return DECORRELATED_CHANNELS;
     }
 
     // The bit depth's code is followed by a reserved bit.
@@ -158,7 +178,7 @@ public final class FlacDecoder implements IntPcmAudio {
     // Sona takes all three from STREAMINFO to size what it decodes, so a frame that disagrees means one is corrupt.
     private void checkStreamInfo(final FrameHeader header, final int sampleRate) throws InvalidFormatException {
         if (sampleRate != streamInfo.sampleRate()
-                || header.channels() != streamInfo.numberOfChannels()
+                || header.channelCount() != streamInfo.numberOfChannels()
                 || header.bitsPerSample() != streamInfo.bitsPerSample()) {
             throw new InvalidFormatException("FLAC frame header doesn't match STREAMINFO!");
         }
@@ -408,12 +428,12 @@ public final class FlacDecoder implements IntPcmAudio {
     }
 
     // Undoes the stereo decorrelation of RFC 9639 section 4.2.
-    private int[][] decorrelate(final int channelAssignment, final long[][] channels) {
+    private int[][] decorrelate(final ChannelAssignment channelAssignment, final long[][] channels) {
         return switch (channelAssignment) {
+            case INDEPENDENT -> independentChannels(channels);
             case LEFT_SIDE -> undoLeftSide(channels);
             case SIDE_RIGHT -> undoSideRight(channels);
             case MID_SIDE -> undoMidSide(channels);
-            default -> independentChannels(channels);
         };
     }
 
@@ -489,14 +509,8 @@ public final class FlacDecoder implements IntPcmAudio {
         return zeros;
     }
 
-    private record FrameHeader(int blockSize, int channelAssignment, int bitsPerSample) {
-
-        int channels() {
-            if (channelAssignment < LEFT_SIDE) {
-                return channelAssignment + 1;
-            }
-            return 2;
-        }
+    private record FrameHeader(
+            int blockSize, ChannelAssignment channelAssignment, int channelCount, int bitsPerSample) {
 
         // The side channel has one bit more than the others, as it's a difference of two of them.
         int subframeBitsPerSample(final int channel) {
@@ -508,9 +522,9 @@ public final class FlacDecoder implements IntPcmAudio {
 
         private boolean isSide(final int channel) {
             return switch (channelAssignment) {
+                case INDEPENDENT -> false;
                 case LEFT_SIDE, MID_SIDE -> channel == 1;
                 case SIDE_RIGHT -> channel == 0;
-                default -> false;
             };
         }
     }

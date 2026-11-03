@@ -6,7 +6,6 @@ import dev.javax.sonaudio.format.FloatPcmAudio;
 import dev.javax.sonaudio.format.IntPcmAudio;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.ByteOrder;
 import java.util.Base64;
 import java.util.List;
@@ -85,17 +84,14 @@ public final class Fingerprint {
 
     /**
      * @return the fingerprint compressed and base64-encoded, as {@code fpcalc} prints it and AcoustID takes it
+     * @throws IOException never in practice, as the bits are written to memory, but the bit stream declares it
      */
-    public String compressed() {
+    public String compressed() throws IOException {
         final var outputStream = new ByteArrayOutputStream();
         // Chromaprint packs each value least significant bit first.
         final var bitStream = BitOutputStream.wrap(outputStream, ByteOrder.LITTLE_ENDIAN);
-        try {
-            writeHeader(bitStream);
-            writeGaps(bitStream, bitGaps());
-        } catch (IOException e) {
-            throw new UncheckedIOException("A ByteArrayOutputStream can't fail to write", e);
-        }
+        writeHeader(bitStream);
+        writeGaps(bitStream, bitGaps());
         return Base64.getUrlEncoder().withoutPadding().encodeToString(outputStream.toByteArray());
     }
 
@@ -108,7 +104,7 @@ public final class Fingerprint {
     }
 
     // Every gap in three bits, then, from the next byte on, the rest of each large one in five more.
-    private static void writeGaps(final BitOutputStream bitStream, final byte[] gaps) throws IOException {
+    private void writeGaps(final BitOutputStream bitStream, final byte[] gaps) throws IOException {
         for (final var gap : gaps) {
             bitStream.writeBits(Math.min(gap, MAX_NORMAL_GAP), NORMAL_BITS);
         }
