@@ -1,16 +1,16 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
+import dev.javax.sonaudio.format.FloatPcmAudio;
+import dev.javax.sonaudio.format.FloatPcmFrame;
+import dev.javax.sonaudio.format.FrameContinuity;
 import java.io.IOException;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
-import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.format.FloatPcmAudio;
-import dev.javax.sonaudio.format.FloatPcmFrame;
-import dev.javax.sonaudio.format.FrameContinuity;
 
 /**
  * The audio of an MP3, which {@link Mp3Parser#parse} opens in its {@link ParsedMp3}, decoded a frame at a time as each

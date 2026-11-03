@@ -114,8 +114,7 @@ final class Imdct implements SubbandSamples {
         final var cosines = new double[size][size / 2];
         for (var sample = 0; sample < size; sample++) {
             for (var line = 0; line < size / 2; line++) {
-                cosines[sample][line] =
-                        Math.cos(Math.PI / (2 * size) * (2 * sample + 1 + size / 2.0) * (2 * line + 1));
+                cosines[sample][line] = Math.cos(Math.PI / (2 * size) * (2 * sample + 1 + size / 2.0) * (2 * line + 1));
             }
         }
         return cosines;

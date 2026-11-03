@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.javax.bitstream.BitOutputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
+import dev.javax.sonaudio.format.MD5Checksum;
+import dev.javax.sonaudio.samples.FlacAudioSample;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
@@ -19,9 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
-import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.format.MD5Checksum;
-import dev.javax.sonaudio.samples.FlacAudioSample;
 
 class FlacDecoderTest {
 

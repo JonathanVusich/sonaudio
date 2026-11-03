@@ -1,11 +1,11 @@
 package dev.javax.sonaudio.fingerprint;
 
-import java.io.IOException;
-import java.util.Arrays;
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.FloatPcmAudio;
 import dev.javax.sonaudio.format.FloatPcmFrame;
 import dev.javax.sonaudio.format.FrameContinuity;
+import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * Brings audio a decoder made in floating point to Chromaprint's 16-bit mono samples at 11025 Hz, as {@code fpcalc}

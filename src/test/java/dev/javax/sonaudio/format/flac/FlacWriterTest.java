@@ -3,17 +3,17 @@ package dev.javax.sonaudio.format.flac;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.time.Duration;
-import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
-import org.junit.jupiter.api.Test;
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.metadata.Blob;
 import dev.javax.sonaudio.metadata.RawMetadata;
 import dev.javax.sonaudio.metadata.RawMetadataBuilder;
 import dev.javax.sonaudio.metadata.Tag;
 import dev.javax.sonaudio.metadata.TagValue;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.time.Duration;
+import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
+import org.junit.jupiter.api.Test;
 
 class FlacWriterTest {
 

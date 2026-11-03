@@ -1,12 +1,12 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.format.StreamUtils;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteOrder;
 import java.util.Arrays;
-import dev.javax.sonaudio.format.StreamUtils;
 
 /**
  * Layer III's bit reservoir (ISO/IEC 11172-3 section 2.4.3.4.1.1): a frame's main data may start in the main data of

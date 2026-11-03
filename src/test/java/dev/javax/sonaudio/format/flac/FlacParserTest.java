@@ -4,6 +4,13 @@ import static java.util.stream.Collectors.groupingBy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.javax.sonaudio.exception.InvalidFormatException;
+import dev.javax.sonaudio.format.MD5Checksum;
+import dev.javax.sonaudio.metadata.RawMetadata;
+import dev.javax.sonaudio.metadata.Tag;
+import dev.javax.sonaudio.metadata.TagSet;
+import dev.javax.sonaudio.metadata.TagValue;
+import dev.javax.sonaudio.samples.FlacSample;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -19,13 +26,6 @@ import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.format.MD5Checksum;
-import dev.javax.sonaudio.metadata.RawMetadata;
-import dev.javax.sonaudio.metadata.Tag;
-import dev.javax.sonaudio.metadata.TagSet;
-import dev.javax.sonaudio.metadata.TagValue;
-import dev.javax.sonaudio.samples.FlacSample;
 
 class FlacParserTest {
 
@@ -202,7 +202,8 @@ class FlacParserTest {
                 .ignoringFieldsMatchingRegexes(".*header\\.size")
                 .isEqualTo(new FlacMetadata(
                         streamInfo,
-                        Arrays.stream(blocks).collect(groupingBy(block -> block.header().blockType()))));
+                        Arrays.stream(blocks)
+                                .collect(groupingBy(block -> block.header().blockType()))));
         assertThat(read.metadataBlocks()
                         .get(BlockType.PADDING)
                         .getFirst()

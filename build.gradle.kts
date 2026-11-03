@@ -2,6 +2,7 @@ plugins {
     id("java-library")
     id("signing")
     id("com.vanniktech.maven.publish").version("0.36.0")
+    id("com.diffplug.spotless").version("8.10.4")
 }
 
 group = "dev.javax"
@@ -29,6 +30,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.assertj:assertj-core:3.27.7")
     testImplementation("org.apache.commons:commons-compress:1.28.0")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.0")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
@@ -36,6 +38,13 @@ dependencies {
 // Warnings fail the build. Sonaudio serializes nothing, so classes need no serialVersionUID.
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(listOf("-Xlint:all,-processing,-serial", "-Werror"))
+}
+
+// Formats the Java sources: `spotlessApply` rewrites them, and `check` (so `build`) fails on any it would change.
+spotless {
+    java {
+        palantirJavaFormat("2.102.0")
+    }
 }
 
 tasks.test {

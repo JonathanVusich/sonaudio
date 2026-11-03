@@ -1,11 +1,11 @@
 package dev.javax.sonaudio.fingerprint;
 
-import java.io.IOException;
-import java.util.Arrays;
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.FloatPcmAudio;
 import dev.javax.sonaudio.format.IntPcmAudio;
 import dev.javax.sonaudio.format.IntPcmFrame;
+import java.io.IOException;
+import java.util.Arrays;
 
 /**
  * The start of a file's audio as {@code fpcalc} reads it: 16-bit mono samples at 11025 Hz, the first two minutes at

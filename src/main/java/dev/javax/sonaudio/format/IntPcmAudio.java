@@ -1,8 +1,8 @@
 package dev.javax.sonaudio.format;
 
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.IOException;
 import java.util.NoSuchElementException;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 /**
  * Decoded audio whose frames are integers, as a lossless decoder such as FLAC's makes them.

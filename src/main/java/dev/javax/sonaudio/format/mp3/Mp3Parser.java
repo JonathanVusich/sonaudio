@@ -1,6 +1,16 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
+import dev.javax.sonaudio.format.Format;
+import dev.javax.sonaudio.format.Parser;
+import dev.javax.sonaudio.format.mp3.FirstFrame.AudioFrame;
+import dev.javax.sonaudio.format.mp3.FirstFrame.VbrHeader;
+import dev.javax.sonaudio.format.mp3.Id3Frame.TextFrame;
+import dev.javax.sonaudio.format.mp3.Id3Frame.UniqueFileId;
+import dev.javax.sonaudio.format.mp3.Id3Frame.UserTextFrame;
+import dev.javax.sonaudio.metadata.RawMetadata;
+import dev.javax.sonaudio.metadata.RawMetadataBuilder;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.EOFException;
@@ -19,16 +29,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.zip.InflaterInputStream;
 import java.util.zip.ZipException;
-import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.format.Format;
-import dev.javax.sonaudio.format.Parser;
-import dev.javax.sonaudio.format.mp3.FirstFrame.AudioFrame;
-import dev.javax.sonaudio.format.mp3.FirstFrame.VbrHeader;
-import dev.javax.sonaudio.format.mp3.Id3Frame.TextFrame;
-import dev.javax.sonaudio.format.mp3.Id3Frame.UniqueFileId;
-import dev.javax.sonaudio.format.mp3.Id3Frame.UserTextFrame;
-import dev.javax.sonaudio.metadata.RawMetadata;
-import dev.javax.sonaudio.metadata.RawMetadataBuilder;
 
 /**
  * Reads an MP3 straight from the file's stream through bit streams: its ID3v2 tag at its start, in version 2.3 or 2.4
@@ -218,9 +218,10 @@ public final class Mp3Parser implements Parser {
         final var freeFormat = readFreeFormatLength(channel, start, audioEnd);
         final var audio = new BoundedInputStream(positionedStream(channel, start), audioEnd - start);
         final var bits = BitInputStream.wrap(audio, ByteOrder.BIG_ENDIAN);
-        if (!(findFrame(audio, bits, audioEnd - start, freeFormat) instanceof FoundFrame(final var first, _))) {
-            throw new InvalidFormatException("MP3 has no frames of audio!");
-        }
+        final var first = switch (findFrame(audio, bits, audioEnd - start, freeFormat)) {
+            case FoundFrame found -> found.header();
+            case NoMoreFrames _ -> throw new InvalidFormatException("MP3 has no frames of audio!");
+        };
         final var length = trustedLength(channel, audioStart, vbrFrame);
         final var frameCount = frameCount(length, audio, bits, audioEnd - start, freeFormat);
         return new Mp3StreamInfo(
@@ -275,7 +276,8 @@ public final class Mp3Parser implements Parser {
         if (header.layer() != Layer.III || header.bitrate() == FrameHeader.FREE_FORMAT_BITRATE) {
             return noVbrFrame(audioStart);
         }
-        final var frame = new BoundedInputStream(positionedStream(channel, audioStart + FrameHeader.SIZE), header.frameLength());
+        final var frame =
+                new BoundedInputStream(positionedStream(channel, audioStart + FrameHeader.SIZE), header.frameLength());
         return switch (vbrHeaderReader.readFirstFrame(header, frame)) {
             case VbrHeader vbrHeader -> new VbrFrame(vbrHeader, audioStart + header.frameLength());
             case AudioFrame _ -> noVbrFrame(audioStart);

@@ -1,15 +1,15 @@
 package dev.javax.sonaudio.fingerprint;
 
 import dev.javax.bitstream.BitOutputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
+import dev.javax.sonaudio.format.FloatPcmAudio;
+import dev.javax.sonaudio.format.IntPcmAudio;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.ByteOrder;
 import java.util.Base64;
 import java.util.List;
-import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.format.FloatPcmAudio;
-import dev.javax.sonaudio.format.IntPcmAudio;
 
 /**
  * The Chromaprint fingerprint of the first two minutes of a file's audio, which AcoustID identifies recordings by. It

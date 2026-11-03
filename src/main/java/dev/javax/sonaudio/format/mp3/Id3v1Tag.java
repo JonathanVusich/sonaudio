@@ -1,7 +1,7 @@
 package dev.javax.sonaudio.format.mp3;
 
-import java.util.List;
 import dev.javax.sonaudio.format.mp3.Id3Frame.TextFrame;
+import java.util.List;
 
 /**
  * @param size how many bytes the tag takes at the end of the file: {@link Id3v1Reader#TAG_SIZE}, or 0 without one

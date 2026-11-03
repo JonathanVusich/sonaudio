@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.within;
 
 import dev.javax.bitstream.BitInputStream;
 import dev.javax.bitstream.BitOutputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteOrder;
 import org.junit.jupiter.api.Test;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 class SpectrumTest {
 

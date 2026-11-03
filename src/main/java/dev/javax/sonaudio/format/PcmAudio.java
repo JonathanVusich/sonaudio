@@ -1,7 +1,7 @@
 package dev.javax.sonaudio.format;
 
-import java.io.IOException;
 import dev.javax.sonaudio.exception.InvalidFormatException;
+import java.io.IOException;
 
 /**
  * Decoded audio, read a frame at a time, all of one kind: {@link IntPcmAudio} gives integers and {@link FloatPcmAudio}

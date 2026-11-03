@@ -1,6 +1,13 @@
 package dev.javax.sonaudio.format.flac;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
+import dev.javax.sonaudio.format.FieldUtils;
+import dev.javax.sonaudio.format.Format;
+import dev.javax.sonaudio.format.MD5Checksum;
+import dev.javax.sonaudio.format.Parser;
+import dev.javax.sonaudio.metadata.RawMetadata;
+import dev.javax.sonaudio.metadata.RawMetadataBuilder;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,13 +20,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
-import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.format.FieldUtils;
-import dev.javax.sonaudio.format.Format;
-import dev.javax.sonaudio.format.MD5Checksum;
-import dev.javax.sonaudio.format.Parser;
-import dev.javax.sonaudio.metadata.RawMetadata;
-import dev.javax.sonaudio.metadata.RawMetadataBuilder;
 
 public final class FlacParser implements Parser {
 
@@ -71,7 +71,9 @@ public final class FlacParser implements Parser {
         var position = streamInfo.header().position();
         while (position == BlockPosition.NOT_LAST) {
             final var block = readBlock(dataStream);
-            metadataBlocks.computeIfAbsent(block.header().blockType(), _ -> new ArrayList<>()).add(block);
+            metadataBlocks
+                    .computeIfAbsent(block.header().blockType(), _ -> new ArrayList<>())
+                    .add(block);
             position = block.header().position();
         }
         metadataBlocks.replaceAll((_, blocks) -> List.copyOf(blocks));

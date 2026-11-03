@@ -3,6 +3,10 @@ package dev.javax.sonaudio.format.flac;
 import static dev.javax.sonaudio.format.flac.FlacUtils.toFields;
 
 import dev.javax.bitstream.BitOutputStream;
+import dev.javax.sonaudio.format.Format;
+import dev.javax.sonaudio.format.MD5Checksum;
+import dev.javax.sonaudio.format.Writer;
+import dev.javax.sonaudio.metadata.RawMetadata;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -11,10 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
-import dev.javax.sonaudio.format.Format;
-import dev.javax.sonaudio.format.MD5Checksum;
-import dev.javax.sonaudio.format.Writer;
-import dev.javax.sonaudio.metadata.RawMetadata;
 
 public final class FlacWriter implements Writer {
 

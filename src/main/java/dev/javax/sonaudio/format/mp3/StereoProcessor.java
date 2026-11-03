@@ -39,7 +39,11 @@ final class StereoProcessor {
      * A granule's two channels, and the right channel's side information and scale factors.
      */
     private record StereoGranule(
-            FrameHeader header, Spectrum left, Spectrum right, GranuleChannel rightChannel, ScaleFactors rightFactors) {}
+            FrameHeader header,
+            Spectrum left,
+            Spectrum right,
+            GranuleChannel rightChannel,
+            ScaleFactors rightFactors) {}
 
     /**
      * Whether a short block's right channel has a value in a band, above which its intensity coding starts.
@@ -52,7 +56,10 @@ final class StereoProcessor {
     // Short bands with values put intensity coding above every long band, whose own values don't count then.
     private void processIntensityStereo(final StereoGranule granule) {
         final var bands = ScaleFactorBands.fromSampleRate(granule.header().sampleRate());
-        final var longBands = granule.rightChannel().windowing().layout().longBandCount(granule.header().version());
+        final var longBands = granule.rightChannel()
+                .windowing()
+                .layout()
+                .longBandCount(granule.header().version());
         final var shortBands = processShortBands(granule, bands);
         final var firstIntensityBand = switch (shortBands) {
             case CODED -> longBands;

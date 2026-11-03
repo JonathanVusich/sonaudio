@@ -1,10 +1,10 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
-import java.io.IOException;
-import java.nio.ByteOrder;
 import dev.javax.sonaudio.format.mp3.FirstFrame.AudioFrame;
 import dev.javax.sonaudio.format.mp3.FirstFrame.VbrHeader;
+import java.io.IOException;
+import java.nio.ByteOrder;
 
 /**
  * Reads the VBR header an encoder may put in an MP3's first frame: a Xing header (written as Info at a constant

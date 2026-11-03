@@ -1,8 +1,8 @@
 package dev.javax.sonaudio.format;
 
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.IOException;
 import java.util.NoSuchElementException;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 /**
  * Decoded audio whose frames are floating-point numbers, as a decoder that works in floating point makes them.

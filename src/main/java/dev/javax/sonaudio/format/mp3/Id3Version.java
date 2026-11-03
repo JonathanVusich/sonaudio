@@ -1,10 +1,10 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.IOException;
 import java.util.Map;
 import java.util.regex.Pattern;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 /**
  * The ID3v2 versions, which lay out the same kinds of frames with different headers, sizes and flags (id3.org's

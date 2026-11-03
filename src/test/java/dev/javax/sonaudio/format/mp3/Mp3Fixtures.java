@@ -1,11 +1,11 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.ByteOrder;
 import java.util.HexFormat;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 /**
  * Builds the decoder's per-frame objects for tests.

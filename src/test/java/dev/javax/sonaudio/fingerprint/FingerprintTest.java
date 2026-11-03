@@ -2,15 +2,15 @@ package dev.javax.sonaudio.fingerprint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.javax.sonaudio.exception.InvalidFormatException;
+import dev.javax.sonaudio.format.IntPcmAudio;
+import dev.javax.sonaudio.format.IntPcmFrame;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.format.IntPcmAudio;
-import dev.javax.sonaudio.format.IntPcmFrame;
 
 /**
  * Compares fingerprints with those {@code fpcalc} (Chromaprint 1.5.1) computed from the same audio, which the

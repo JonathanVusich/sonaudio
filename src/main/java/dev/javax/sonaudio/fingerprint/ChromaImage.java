@@ -1,6 +1,5 @@
 package dev.javax.sonaudio.fingerprint;
 
-
 /**
  * How a signal's energy spreads over the twelve notes of the octave as it plays: a row per overlapping frame of the
  * signal, a column per note, as Chromaprint computes it. Each row is smoothed with its neighbours and normalised.

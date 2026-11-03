@@ -1,5 +1,7 @@
 package dev.javax.sonaudio.format.mp3;
 
+import dev.javax.sonaudio.metadata.Tag;
+import dev.javax.sonaudio.metadata.TagValue;
 import java.time.Year;
 import java.util.Arrays;
 import java.util.Locale;
@@ -8,8 +10,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import dev.javax.sonaudio.metadata.Tag;
-import dev.javax.sonaudio.metadata.TagValue;
 
 /**
  * The ID3v2.3 and ID3v2.4 text frames that hold Sona's tags, as Picard writes them.

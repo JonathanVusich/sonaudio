@@ -3,12 +3,12 @@ package dev.javax.sonaudio.format.flac;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.javax.sonaudio.metadata.Blob;
+import dev.javax.sonaudio.metadata.TagValue;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
-import dev.javax.sonaudio.metadata.Blob;
-import dev.javax.sonaudio.metadata.TagValue;
 
 class FlacUtilsTest {
 

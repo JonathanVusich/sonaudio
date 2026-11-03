@@ -2,10 +2,10 @@ package dev.javax.sonaudio.format.mp3;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import org.junit.jupiter.api.Test;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 class BitReservoirTest {
 
@@ -15,6 +15,7 @@ class BitReservoirTest {
         final var header = Mp3Fixtures.header("FFFB1000");
         final var mainData = new ByteArrayInputStream(new byte[header.mainDataSize()]);
 
-        assertThatCode(() -> new BitReservoir().restartWithFrame(mainData, header)).doesNotThrowAnyException();
+        assertThatCode(() -> new BitReservoir().restartWithFrame(mainData, header))
+                .doesNotThrowAnyException();
     }
 }

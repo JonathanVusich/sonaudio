@@ -1,5 +1,7 @@
 package dev.javax.sonaudio.format.flac;
 
+import dev.javax.sonaudio.metadata.Tag;
+import dev.javax.sonaudio.metadata.TagValue;
 import java.time.Year;
 import java.util.Arrays;
 import java.util.Map;
@@ -7,8 +9,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import dev.javax.sonaudio.metadata.Tag;
-import dev.javax.sonaudio.metadata.TagValue;
 
 @RequiredArgsConstructor
 @Getter

@@ -3,13 +3,13 @@ package dev.javax.sonaudio.format.mp3;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.javax.sonaudio.exception.InvalidFormatException;
+import dev.javax.sonaudio.samples.Mp3Sample;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
-import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.samples.Mp3Sample;
 
 class Mp3StreamInfoTest {
 

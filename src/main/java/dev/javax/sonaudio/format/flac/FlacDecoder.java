@@ -1,17 +1,17 @@
 package dev.javax.sonaudio.format.flac;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
+import dev.javax.sonaudio.format.ChecksummedByteSource;
+import dev.javax.sonaudio.format.Crc;
+import dev.javax.sonaudio.format.IntPcmAudio;
+import dev.javax.sonaudio.format.IntPcmFrame;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.NoSuchElementException;
-import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.format.ChecksummedByteSource;
-import dev.javax.sonaudio.format.Crc;
-import dev.javax.sonaudio.format.IntPcmAudio;
-import dev.javax.sonaudio.format.IntPcmFrame;
 
 /**
  * Decodes the audio frames of a FLAC stream to PCM samples (RFC 9639 section 9), a frame at a time as each is asked

@@ -3,6 +3,15 @@ package dev.javax.sonaudio.format.mp3;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.javax.sonaudio.exception.InvalidFormatException;
+import dev.javax.sonaudio.format.mp3.Id3Frame.TextFrame;
+import dev.javax.sonaudio.format.mp3.Id3Frame.UserTextFrame;
+import dev.javax.sonaudio.metadata.RawMetadata;
+import dev.javax.sonaudio.metadata.Tag;
+import dev.javax.sonaudio.metadata.TagSet;
+import dev.javax.sonaudio.metadata.TagValue;
+import dev.javax.sonaudio.samples.FlacSample;
+import dev.javax.sonaudio.samples.Mp3Sample;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.channels.Channels;
@@ -14,15 +23,6 @@ import java.util.List;
 import java.util.Set;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
-import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.format.mp3.Id3Frame.TextFrame;
-import dev.javax.sonaudio.format.mp3.Id3Frame.UserTextFrame;
-import dev.javax.sonaudio.metadata.RawMetadata;
-import dev.javax.sonaudio.metadata.Tag;
-import dev.javax.sonaudio.metadata.TagSet;
-import dev.javax.sonaudio.metadata.TagValue;
-import dev.javax.sonaudio.samples.FlacSample;
-import dev.javax.sonaudio.samples.Mp3Sample;
 
 class Mp3ParserTest {
 
