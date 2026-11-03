@@ -139,7 +139,7 @@ final class FloatSignalReader {
             for (var channel = 0; channel < channelCount; channel++) {
                 resampled[channel] = resampledChannel(channels[channel]);
             }
-            return mixedMono(resampled);
+            return SignalUtils.mixedDown(resampled, resampled[0].length);
         }
 
         private float[] resampledChannel(final float[] samples) {
@@ -147,29 +147,6 @@ final class FloatSignalReader {
                 return Arrays.copyOf(samples, length);
             }
             return new Resampler(sampleRate, SAMPLE_RATE).resampleEnded(samples, length);
-        }
-
-        // swresample's mix to mono: each channel of stereo counts half, and with more channels, an equal share.
-        private float[] mixedMono(final float[][] resampled) {
-            if (channelCount == 1) {
-                return resampled[0];
-            }
-            final var mono = new float[resampled[0].length];
-            for (var index = 0; index < mono.length; index++) {
-                mono[index] = mixedSample(resampled, index);
-            }
-            return mono;
-        }
-
-        private float mixedSample(final float[][] resampled, final int index) {
-            if (channelCount == 2) {
-                return 0.5f * resampled[0][index] + 0.5f * resampled[1][index];
-            }
-            var sum = 0f;
-            for (var channel = 0; channel < channelCount; channel++) {
-                sum += resampled[channel][index];
-            }
-            return sum / channelCount;
         }
     }
 }

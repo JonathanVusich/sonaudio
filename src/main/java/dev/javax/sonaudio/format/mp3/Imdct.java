@@ -1,5 +1,9 @@
 package dev.javax.sonaudio.format.mp3;
 
+import static dev.javax.sonaudio.format.mp3.ImdctUtils.startWindow;
+import static dev.javax.sonaudio.format.mp3.ImdctUtils.stopWindow;
+import static dev.javax.sonaudio.format.mp3.ImdctUtils.subbandBlockType;
+
 import java.util.Arrays;
 
 /**
@@ -18,8 +22,6 @@ final class Imdct implements SubbandSamples {
     private static final int SHORT_SIZE = 2 * SHORT_LINES;
     // A short block's three windows start at samples 6, 12 and 18.
     private static final int SHORT_START = SHORT_LINES;
-    // A mixed block's two lowest subbands are long blocks with the normal window, whatever its block type.
-    private static final int MIXED_LONG_SUBBANDS = 2;
     // The requantized lines come out 32 times the 2^23 full scale the synthesis filterbank takes.
     private static final double SCALE = 1.0 / 32;
 
@@ -59,14 +61,6 @@ final class Imdct implements SubbandSamples {
     @Override
     public float subbandSample(final int instant, final int subband) {
         return subbandSamples[instant * SUBBANDS + subband];
-    }
-
-    private static BlockType subbandBlockType(
-            final int subband, final BlockType blockType, final LowSubbands lowSubbands) {
-        if (lowSubbands == LowSubbands.NORMAL_WINDOW && subband < MIXED_LONG_SUBBANDS) {
-            return BlockType.NORMAL;
-        }
-        return blockType;
     }
 
     private void longBlock(final Spectrum spectrum, final int subband, final BlockType blockType) {
@@ -130,32 +124,6 @@ final class Imdct implements SubbandSamples {
             windows[BlockType.STOP.ordinal()][sample] = stopWindow(sample, sine);
         }
         return windows;
-    }
-
-    private static double startWindow(final int sample, final double sine) {
-        if (sample < 18) {
-            return sine;
-        }
-        if (sample < 24) {
-            return 1;
-        }
-        if (sample < 30) {
-            return Math.sin(Math.PI / SHORT_SIZE * (sample - 18 + 0.5));
-        }
-        return 0;
-    }
-
-    private static double stopWindow(final int sample, final double sine) {
-        if (sample < 6) {
-            return 0;
-        }
-        if (sample < 12) {
-            return Math.sin(Math.PI / SHORT_SIZE * (sample - 6 + 0.5));
-        }
-        if (sample < 18) {
-            return 1;
-        }
-        return sine;
     }
 
     private static double[] shortWindow() {

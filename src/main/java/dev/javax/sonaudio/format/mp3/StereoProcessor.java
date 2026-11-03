@@ -1,5 +1,9 @@
 package dev.javax.sonaudio.format.mp3;
 
+import static dev.javax.sonaudio.format.mp3.StereoUtils.firstIntensityLongBand;
+import static dev.javax.sonaudio.format.mp3.StereoUtils.firstIntensityShortBand;
+import static dev.javax.sonaudio.format.mp3.StereoUtils.shortLineStart;
+
 /**
  * Turns a joint stereo granule's coded channels back into left and right (ISO/IEC 11172-3 section 2.4.3.4.9.2,
  * ISO/IEC 13818-3 section 2.4.3.2). Mid/side stereo codes the channels' sum and difference. Intensity stereo codes only
@@ -128,7 +132,7 @@ final class StereoProcessor {
 
     // FFmpeg folds the 1/sqrt(2) of mid/side stereo into the global gain when no band is intensity coded, as the
     // gain's steps are 2^(1/4), and doesn't scale the sum and difference then.
-    private static void sumAndDifference(final Spectrum left, final Spectrum right, final int start, final int end) {
+    private void sumAndDifference(final Spectrum left, final Spectrum right, final int start, final int end) {
         for (var line = start; line < end; line++) {
             final var mid = left.line(line);
             final var side = right.line(line);
@@ -137,7 +141,7 @@ final class StereoProcessor {
         }
     }
 
-    private static void midSide(final Spectrum left, final Spectrum right, final int start, final int end) {
+    private void midSide(final Spectrum left, final Spectrum right, final int start, final int end) {
         for (var line = start; line < end; line++) {
             final var mid = left.line(line);
             final var side = right.line(line);
@@ -146,46 +150,11 @@ final class StereoProcessor {
         }
     }
 
-    private static RightPart rightPart(final int band, final int firstIntensityBand) {
+    private RightPart rightPart(final int band, final int firstIntensityBand) {
         if (band >= firstIntensityBand) {
             return RightPart.ZERO;
         }
         return RightPart.CODED;
-    }
-
-    // The band above the last long one with a value, which is where intensity coding starts, or 0 when none has.
-    private static int firstIntensityLongBand(final ScaleFactorBands bands, final Spectrum right, final int longBands) {
-        for (var band = longBands - 1; band >= 0; band--) {
-            if (hasValue(right, bands.longBandStart(band), bands.longBandWidth(band))) {
-                return band + 1;
-            }
-        }
-        return 0;
-    }
-
-    // The same for a window's short bands, or the first short band when none has a value.
-    private static int firstIntensityShortBand(
-            final ScaleFactorBands bands, final Spectrum right, final int firstBand, final int window) {
-        for (var band = ScaleFactorBands.SHORT_BANDS - 1; band >= firstBand; band--) {
-            if (hasValue(right, shortLineStart(bands, band, window), bands.shortBandWidth(band))) {
-                return band + 1;
-            }
-        }
-        return firstBand;
-    }
-
-    private static boolean hasValue(final Spectrum spectrum, final int start, final int width) {
-        for (var line = start; line < start + width; line++) {
-            if (spectrum.line(line) != 0) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // Before reordering, each short band holds its windows one after another.
-    private static int shortLineStart(final ScaleFactorBands bands, final int band, final int window) {
-        return Windowing.WINDOWS * bands.shortBandStart(band) + window * bands.shortBandWidth(band);
     }
 
     // Whether a band is in the right channel's coded part, or above it, where the right channel is all 0.

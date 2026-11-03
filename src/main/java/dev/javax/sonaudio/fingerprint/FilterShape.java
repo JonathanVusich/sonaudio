@@ -1,5 +1,7 @@
 package dev.javax.sonaudio.fingerprint;
 
+import static dev.javax.sonaudio.fingerprint.FilterUtils.contrast;
+
 /**
  * How a {@link Classifier}'s filter splits its rectangle of an {@link IntegralImage} into two parts to compare: rows
  * run forward in time, and bands up through the notes of the octave.
@@ -45,7 +47,7 @@ public enum FilterShape {
         };
     }
 
-    private static double bandThirdsContrast(
+    private double bandThirdsContrast(
             final IntegralImage image, final int row, final int band, final int rows, final int bands) {
         final var third = bands / 3;
         final var twoThirds = 2 * bands / 3;
@@ -54,16 +56,12 @@ public enum FilterShape {
                 image.area(row, band, rows, third) + image.area(row, band + twoThirds, rows, bands - twoThirds));
     }
 
-    private static double rowThirdsContrast(
+    private double rowThirdsContrast(
             final IntegralImage image, final int row, final int band, final int rows, final int bands) {
         final var third = rows / 3;
         final var twoThirds = 2 * rows / 3;
         return contrast(
                 image.area(row + third, band, twoThirds - third, bands),
                 image.area(row, band, third, bands) + image.area(row + twoThirds, band, rows - twoThirds, bands));
-    }
-
-    private static double contrast(final double first, final double second) {
-        return Math.log(1 + first) - Math.log(1 + second);
     }
 }

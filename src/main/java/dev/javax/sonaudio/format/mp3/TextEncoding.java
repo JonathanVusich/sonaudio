@@ -87,7 +87,7 @@ enum TextEncoding {
     }
 
     // A surrogate pair is read a unit at a time, and the string joins them.
-    private static int readUtf16CodeUnit(final BitInputStream bits, final ByteOrder byteOrder) throws IOException {
+    private int readUtf16CodeUnit(final BitInputStream bits, final ByteOrder byteOrder) throws IOException {
         final var codeUnit = (char) bits.readBits(16);
         if (byteOrder == ByteOrder.LITTLE_ENDIAN) {
             return Character.reverseBytes(codeUnit);

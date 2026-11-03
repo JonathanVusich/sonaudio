@@ -58,8 +58,7 @@ final class VbrHeaderReader {
 
     // Its frame and byte counts are each optional. Without either, the frames are counted instead, taking this one for
     // audio, which it is: a frame of silence.
-    private static FirstFrame readXingHeader(final BoundedInputStream frame, final BitInputStream bits)
-            throws IOException {
+    private FirstFrame readXingHeader(final BoundedInputStream frame, final BitInputStream bits) throws IOException {
         final var flags = bits.readBits(32);
         final var frameCount = readField(bits, flags, FRAMES_FLAG);
         final var byteCount = readField(bits, flags, BYTES_FLAG);
@@ -70,7 +69,7 @@ final class VbrHeaderReader {
         return readLameTag(frame, bits, frameCount, byteCount);
     }
 
-    private static long readField(final BitInputStream bits, final long flags, final int flag) throws IOException {
+    private long readField(final BitInputStream bits, final long flags, final int flag) throws IOException {
         if ((flags & flag) == 0) {
             return 0;
         }
@@ -78,7 +77,7 @@ final class VbrHeaderReader {
     }
 
     // The fields after the frame and byte counts.
-    private static int xingFieldsSize(final long flags) {
+    private int xingFieldsSize(final long flags) {
         var size = 0;
         if ((flags & TOC_FLAG) != 0) {
             size += TOC_SIZE;
@@ -90,7 +89,7 @@ final class VbrHeaderReader {
     }
 
     // Other encoders may leave the rest of the frame empty, or fill it with their own data.
-    private static VbrHeader readLameTag(
+    private VbrHeader readLameTag(
             final BoundedInputStream frame, final BitInputStream bits, final long frameCount, final long byteCount)
             throws IOException {
         if (!(readId(frame, bits, 0) instanceof Id encoder) || !isLameEncoder(encoder.value())) {
@@ -103,7 +102,7 @@ final class VbrHeaderReader {
     }
 
     // In MPEG-1 stereo, the Xing header's place is VBRI's too, so the ID read there is VBRI's.
-    private static FirstFrame readVbriHeader(
+    private FirstFrame readVbriHeader(
             final FrameHeader header, final BoundedInputStream frame, final BitInputStream bits, final long xingId)
             throws IOException {
         if (vbriGap(header) < 0) {
@@ -113,7 +112,7 @@ final class VbrHeaderReader {
     }
 
     // VBRI is read from where its offset is, when the frame has bytes enough.
-    private static FirstFrame readVbriHeaderAtOffset(
+    private FirstFrame readVbriHeaderAtOffset(
             final FrameHeader header, final BoundedInputStream frame, final BitInputStream bits) throws IOException {
         final var gap = vbriGap(header);
         if (gap < 0 || !(readId(frame, bits, gap) instanceof Id id)) {
@@ -122,11 +121,11 @@ final class VbrHeaderReader {
         return readVbriFields(frame, bits, id.value());
     }
 
-    private static int vbriGap(final FrameHeader header) {
+    private int vbriGap(final FrameHeader header) {
         return VBRI_OFFSET - (FrameHeader.SIZE + header.sideInfoSize() + ID_SIZE);
     }
 
-    private static FirstFrame readVbriFields(final BoundedInputStream frame, final BitInputStream bits, final long id)
+    private FirstFrame readVbriFields(final BoundedInputStream frame, final BitInputStream bits, final long id)
             throws IOException {
         if (id != VBRI || bits.readBits(16) != VBRI_VERSION) {
             return new AudioFrame();
@@ -136,12 +135,12 @@ final class VbrHeaderReader {
         return new VbrHeader(bits.readBits(32), byteCount, new EncoderTrim.None());
     }
 
-    private static boolean isLameEncoder(final long encoder) {
+    private boolean isLameEncoder(final long encoder) {
         return encoder == LAME || encoder == LAVF || encoder == LAVC;
     }
 
     // The ID after skipping that many bytes, which a short frame of audio may not have.
-    private static IdRead readId(final BoundedInputStream frame, final BitInputStream bits, final int skip)
+    private IdRead readId(final BoundedInputStream frame, final BitInputStream bits, final int skip)
             throws IOException {
         if (frame.getRemaining() < skip + ID_SIZE) {
             return new NoId();

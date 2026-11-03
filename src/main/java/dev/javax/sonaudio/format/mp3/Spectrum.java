@@ -359,7 +359,7 @@ final class Spectrum {
     }
 
     // A sign bit of 1 is negative.
-    private static float signed(final BitInputStream bits, final float value) throws IOException {
+    private float signed(final BitInputStream bits, final float value) throws IOException {
         if (bits.readBits(1) == 1) {
             return -value;
         }

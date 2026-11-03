@@ -41,7 +41,7 @@ public final class ChromaImage {
         return rows[row][band];
     }
 
-    private static double[][] chromaRows(final Signal signal) {
+    private double[][] chromaRows(final Signal signal) {
         final var fft = new Fft(FRAME_SIZE);
         final var frameCount = Math.max(0, (signal.sampleCount() - FRAME_SIZE) / FRAME_STEP + 1);
         final var rows = new double[frameCount][];
@@ -55,7 +55,7 @@ public final class ChromaImage {
     }
 
     // The window and the product are single precision, as Chromaprint's are.
-    private static void windowFrame(final Signal signal, final int start, final float[] frame) {
+    private void windowFrame(final Signal signal, final int start, final float[] frame) {
         for (var i = 0; i < FRAME_SIZE; i++) {
             frame[i] = signal.sample(start + i) * WINDOW[i];
         }

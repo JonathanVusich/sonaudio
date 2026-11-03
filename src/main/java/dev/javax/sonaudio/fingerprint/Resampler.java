@@ -1,5 +1,11 @@
 package dev.javax.sonaudio.fingerprint;
 
+import static dev.javax.sonaudio.fingerprint.ResamplerUtils.besselI0;
+import static dev.javax.sonaudio.fingerprint.ResamplerUtils.exactPhaseCount;
+import static dev.javax.sonaudio.fingerprint.ResamplerUtils.extendedSample;
+import static dev.javax.sonaudio.fingerprint.ResamplerUtils.greatestCommonDivisor;
+import static dev.javax.sonaudio.fingerprint.ResamplerUtils.sinc;
+
 import java.util.Arrays;
 
 /**
@@ -39,10 +45,10 @@ public final class Resampler {
         this.outputRate = outputRate;
         final var factor = Math.min(outputRate * CUTOFF / inputRate, 1.0);
         this.filterLength = evenLength(Math.max((int) Math.ceil(FILTER_SIZE / factor), 1));
-        this.phaseCount = exactPhaseCount(inputRate, outputRate);
+        this.phaseCount = exactPhaseCount(inputRate, outputRate, 1 << PHASE_SHIFT);
         this.filterStride = (filterLength + FILTER_ALIGNMENT - 1) / FILTER_ALIGNMENT * FILTER_ALIGNMENT;
         this.filterBank = filterBank(factor);
-        final var divisor = gcd(outputRate, (long) inputRate * phaseCount);
+        final var divisor = greatestCommonDivisor(outputRate, (long) inputRate * phaseCount);
         var source = (int) (outputRate / divisor);
         var destination = (int) (inputRate * (long) phaseCount / divisor);
         while (destination < INCREMENT_LIMIT && source < INCREMENT_LIMIT) {
@@ -124,19 +130,6 @@ public final class Resampler {
             window[i] = extendedSample(input, length, start + i);
         }
         return outputSample(window, 0, index, fraction);
-    }
-
-    private static float extendedSample(final float[] input, final int length, final int position) {
-        var source = position;
-        if (position < 0) {
-            source = -position;
-        } else if (position >= length) {
-            source = 2 * length - 1 - position;
-        }
-        if (source < 0 || source >= length) {
-            return 0;
-        }
-        return input[source];
     }
 
     // How many samples libswresample reflects off the end of the audio, from what it hasn't finished with.
@@ -237,85 +230,10 @@ public final class Resampler {
         return StrictMath.sin(Math.PI * phase / phaseCount) * parity;
     }
 
-    private static double sinc(final double x, final double sign, final double factor) {
-        if (x == 0) {
-            return 1.0;
-        }
-        if (factor == 1.0) {
-            return sign / x;
-        }
-        return StrictMath.sin(x) / x;
-    }
-
-    // As many phases as the rates make exact, if that's under the 256 asked for.
-    private static int exactPhaseCount(final int inputRate, final int outputRate) {
-        final var exact = outputRate / gcd(outputRate, inputRate);
-        if (exact <= 1 << PHASE_SHIFT) {
-            return (int) exact;
-        }
-        return 1 << PHASE_SHIFT;
-    }
-
     private static int evenLength(final int length) {
         if (length > 1) {
             return (length + 1) / 2 * 2;
         }
         return length;
     }
-
-    private static long gcd(final long a, final long b) {
-        var larger = a;
-        var smaller = b;
-        while (smaller != 0) {
-            final var remainder = larger % smaller;
-            larger = smaller;
-            smaller = remainder;
-        }
-        return larger;
-    }
-
-    // FFmpeg's av_bessel_i0 for the arguments up to 15 a Kaiser window of beta 9 gives it: Blair and Edwards' minimax
-    // rational approximation.
-    private static double besselI0(final double x) {
-        if (x == 0) {
-            return 1.0;
-        }
-        final var y = Math.abs(x) * Math.abs(x);
-        return evaluatePolynomial(BESSEL_NUMERATOR, y) / evaluatePolynomial(BESSEL_DENOMINATOR, y);
-    }
-
-    private static double evaluatePolynomial(final double[] coefficients, final double x) {
-        var sum = coefficients[coefficients.length - 1];
-        for (var i = coefficients.length - 2; i >= 0; i--) {
-            sum *= x;
-            sum += coefficients[i];
-        }
-        return sum;
-    }
-
-    private static final double[] BESSEL_NUMERATOR = {
-        -2.2335582639474375249e+15,
-        -5.5050369673018427753e+14,
-        -3.2940087627407749166e+13,
-        -8.4925101247114157499e+11,
-        -1.1912746104985237192e+10,
-        -1.0313066708737980747e+08,
-        -5.9545626019847898221e+05,
-        -2.4125195876041896775e+03,
-        -7.0935347449210549190e+00,
-        -1.5453977791786851041e-02,
-        -2.5172644670688975051e-05,
-        -3.0517226450451067446e-08,
-        -2.6843448573468483278e-11,
-        -1.5982226675653184646e-14,
-        -5.2487866627945699800e-18,
-    };
-    private static final double[] BESSEL_DENOMINATOR = {
-        -2.2335582639474375245e+15,
-        7.8858692566751002988e+12,
-        -1.2207067397808979846e+10,
-        1.0377081058062166144e+07,
-        -4.8527560179962773045e+03,
-        1.0,
-    };
 }
