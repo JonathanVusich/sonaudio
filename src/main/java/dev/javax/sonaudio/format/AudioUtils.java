@@ -4,12 +4,16 @@ import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.IOException;
 import java.time.Duration;
 
+/**
+ * Works out how long audio plays.
+ */
 public final class AudioUtils {
 
     private AudioUtils() {}
 
     /**
      * @param samples per channel
+     * @param sampleRate samples per second, per channel
      * @return how long that many samples play at the sample rate
      */
     public static Duration duration(final long samples, final int sampleRate) {
@@ -22,6 +26,7 @@ public final class AudioUtils {
      * encoder or an edit can leave wrong. Frames are counted in runs at one sample rate, which a stream rarely changes,
      * so that a run's duration is worked out from its whole sample count, not rounded for each frame.
      *
+     * @param audio the audio from its first frame, which this reads to its end
      * @return how long the audio plays, having read every frame of it
      * @throws IOException when the audio can't be read, or ends before a frame does
      * @throws InvalidFormatException when the audio is corrupt

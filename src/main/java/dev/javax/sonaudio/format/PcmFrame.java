@@ -12,6 +12,9 @@ public sealed interface PcmFrame permits IntPcmFrame, FloatPcmFrame {
      */
     int sampleRate();
 
+    /**
+     * @return how many channels the frame has, which a stream may change between frames
+     */
     int channelCount();
 
     /**

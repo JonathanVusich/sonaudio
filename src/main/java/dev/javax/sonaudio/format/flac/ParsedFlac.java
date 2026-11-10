@@ -7,6 +7,7 @@ import dev.javax.sonaudio.metadata.RawMetadata;
  * A FLAC stream whose metadata blocks have been read. Its audio is only read as {@code audio} is asked for each frame,
  * from the stream it was parsed from, so its frames can only be read while that stream is still open.
  *
+ * @param metadata the stream's tags and duration, from its STREAMINFO and VORBIS_COMMENT blocks
  * @param audio decodes the stream's audio frames, starting at the first
  */
 public record ParsedFlac(RawMetadata metadata, FlacDecoder audio) implements ParsedAudio {}

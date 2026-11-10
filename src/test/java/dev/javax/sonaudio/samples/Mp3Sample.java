@@ -52,7 +52,7 @@ public enum Mp3Sample {
     // MPEG-1 at 44.1 kHz that goes from mono to dual channel, stereo, and joint stereo with every mode extension
     // (intensity stereo among them, in long, short and mixed blocks), then back to mono. Its reference is FFmpeg's
     // decoder's, each frame with its own channels: ISO's reference decoder splits intensity coded mixed blocks
-    // differently, and Sona decodes as FFmpeg does, as AcoustID's fpcalc decodes with it.
+    // differently, and sonaudio decodes as FFmpeg does, as AcoustID's fpcalc decodes with it.
     HE_MODE("he_mode.mp3"),
     // Tones with sharp attacks, which LAME codes in short blocks, with mid/side stereo: MPEG-1 at 48 kHz and 192
     // kbit/s, MPEG-2 at 22.05 kHz and 48 kbit/s, and MPEG-2.5 at 11.025 kHz and 32 kbit/s, each with an Info header and
@@ -71,7 +71,8 @@ public enum Mp3Sample {
     // delay.
     SHINE("shine.mp3"),
     // Layers I and II, from the ISO/IEC 13818-4 conformance tests (standards.iso.org/ittf/PubliclyAvailableStandards),
-    // whose reference here is FFmpeg's decoder, as Sona decodes as it does. Those of MPEG-1 code more channels in an
+    // whose reference here is FFmpeg's decoder, as sonaudio decodes as it does. Those of MPEG-1 code more channels in
+    // an
     // extension of their frames, which an MPEG-1 decoder skips, decoding the stereo they're compatible with.
     // MPEG-1 Layer II stereo at 44.1 kHz and 384 kbit/s, with CRCs: allocation table B.2b.
     ISO_TEST01("iso_test01.mp3"),

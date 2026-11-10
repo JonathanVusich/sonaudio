@@ -12,8 +12,9 @@ import java.util.List;
 
 /**
  * The Chromaprint fingerprint of the first two minutes of a file's audio, which AcoustID identifies recordings by. It
- * follows Chromaprint's default algorithm, as {@code fpcalc} computes it, but resamples the audio with Sona's own
- * filter, so the two may differ in a few bits.
+ * follows Chromaprint's default algorithm as {@code fpcalc} computes it, resampling the audio as FFmpeg's
+ * libswresample does on an x86-64 processor, so its fingerprints are {@code fpcalc}'s, bit for bit for nearly every
+ * file.
  */
 public final class Fingerprint {
 
@@ -50,8 +51,9 @@ public final class Fingerprint {
     private final int[] subFingerprints;
 
     /**
-     * Decodes only as much of the audio as it needs.
+     * Fingerprints integer audio, as FLAC decodes, decoding only as much of it as it needs.
      *
+     * @param audio the audio from its first frame, which this reads on from
      * @throws IOException when the audio can't be read, or ends before a frame does
      * @throws InvalidFormatException when the audio is corrupt
      */
@@ -60,8 +62,10 @@ public final class Fingerprint {
     }
 
     /**
-     * Decodes only as much of the audio as it needs.
+     * Fingerprints floating-point audio, as MP3 decodes, decoding only as much of it as it needs. It stops at a frame
+     * the decoder dropped, as {@code fpcalc} does.
      *
+     * @param audio the audio from its first frame, which this reads on from
      * @throws IOException when the audio can't be read, or ends before a frame does
      * @throws InvalidFormatException when the audio is corrupt
      */
@@ -76,6 +80,8 @@ public final class Fingerprint {
     }
 
     /**
+     * Whether there is anything to look up.
+     *
      * @return whether the audio was too short to fingerprint, which AcoustID can't look up
      */
     public boolean isEmpty() {
@@ -83,6 +89,8 @@ public final class Fingerprint {
     }
 
     /**
+     * Compresses the fingerprint as Chromaprint does.
+     *
      * @return the fingerprint compressed and base64-encoded, as {@code fpcalc} prints it and AcoustID takes it
      * @throws IOException never in practice, as the bits are written to memory, but the bit stream declares it
      */

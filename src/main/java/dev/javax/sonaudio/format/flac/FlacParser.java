@@ -21,6 +21,10 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 
+/**
+ * Reads a FLAC stream's metadata blocks (RFC 9639, section 8), and hands out a {@link FlacDecoder} of the audio frames
+ * after them. A malformed block throws {@link dev.javax.sonaudio.exception.InvalidFormatException}.
+ */
 public final class FlacParser implements Parser {
 
     static final byte[] FLAC_HEADER = "fLaC".getBytes(StandardCharsets.US_ASCII);

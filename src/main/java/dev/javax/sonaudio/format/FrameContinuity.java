@@ -5,6 +5,12 @@ package dev.javax.sonaudio.format;
  * such a frame, which stops AcoustID's fpcalc from reading any further, though FFmpeg's command line goes on.
  */
 public enum FrameContinuity {
+    /**
+     * The decoder dropped no frame before this one.
+     */
     CONTINUOUS,
+    /**
+     * The decoder dropped a frame it couldn't decode just before this one.
+     */
     AFTER_DECODING_ERROR
 }

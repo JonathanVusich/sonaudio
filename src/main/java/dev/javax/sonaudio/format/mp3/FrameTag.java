@@ -1,7 +1,7 @@
 package dev.javax.sonaudio.format.mp3;
 
 /**
- * What an ID3 frame holds: one of Sona's tags, or a tag Sona keeps under its own name.
+ * What an ID3 frame holds: one of sonaudio's tags, or a tag sonaudio keeps under its own name.
  */
 sealed interface FrameTag permits FrameTag.Known, FrameTag.Unknown {
 

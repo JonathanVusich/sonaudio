@@ -16,6 +16,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
+/**
+ * Writes a FLAC stream's metadata: its {@code fLaC} marker, a STREAMINFO block of the duration, as a 16-bit stereo
+ * stream at 44.1 kHz with no checksum, and a VORBIS_COMMENT block of the tags.
+ */
 public final class FlacWriter implements Writer {
 
     private static final int STREAM_INFO_SIZE = 34;

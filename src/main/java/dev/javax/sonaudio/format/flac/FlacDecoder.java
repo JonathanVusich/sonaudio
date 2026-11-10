@@ -46,6 +46,9 @@ public final class FlacDecoder implements IntPcmAudio {
         this.bits = BitInputStream.wrap(bytes, ByteOrder.BIG_ENDIAN);
     }
 
+    /**
+     * @return the stream's STREAMINFO block, which its frames are decoded by
+     */
     public StreamInfo streamInfo() {
         return streamInfo;
     }
@@ -173,7 +176,7 @@ public final class FlacDecoder implements IntPcmAudio {
         }
     }
 
-    // Sona takes all three from STREAMINFO to size what it decodes, so a frame that disagrees means one is corrupt.
+    // sonaudio takes all three from STREAMINFO to size what it decodes, so a frame that disagrees means one is corrupt.
     private void checkStreamInfo(final FrameHeader header, final int sampleRate) throws InvalidFormatException {
         if (sampleRate != streamInfo.sampleRate()
                 || header.channelCount() != streamInfo.numberOfChannels()

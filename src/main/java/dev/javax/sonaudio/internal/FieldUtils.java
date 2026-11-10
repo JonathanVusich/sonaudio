@@ -4,6 +4,9 @@ import dev.javax.bitstream.BitInputStream;
 import java.io.IOException;
 import lombok.experimental.UtilityClass;
 
+/**
+ * Reads fields more than one format has.
+ */
 @UtilityClass
 public final class FieldUtils {
 
@@ -11,7 +14,10 @@ public final class FieldUtils {
      * Reads a fixed-size field of single-byte text (ASCII or ISO-8859-1), which fills the field or ends early with a
      * NUL, followed by padding.
      *
+     * @param bits the stream, at the field
+     * @param size the field's length in bytes, which this reads all of
      * @return the field's text, up to its first NUL
+     * @throws IOException when the stream can't be read, or ends before the field does
      */
     public static String readNulPaddedString(final BitInputStream bits, final int size) throws IOException {
         final var field = new StringBuilder(size);

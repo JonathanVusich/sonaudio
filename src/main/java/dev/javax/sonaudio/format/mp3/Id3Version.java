@@ -39,7 +39,7 @@ enum Id3Version {
     private static final int V2_2_FRAME_ID_SIZE = 3;
     private static final int FRAME_ID_SIZE = 4;
 
-    // The ID3v2.2 frames Sona reads, by the ID3v2.3 frames that replaced them, so both read alike.
+    // The ID3v2.2 frames sonaudio reads, by the ID3v2.3 frames that replaced them, so both read alike.
     private static final Map<String, String> V2_2_FRAME_IDS = Map.of(
             "TT2", "TIT2",
             "TP1", "TPE1",

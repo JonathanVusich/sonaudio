@@ -11,7 +11,7 @@ import java.util.stream.Stream;
 
 /**
  * Reads the ID3v1 tag that may end an MP3: 128 bytes of fixed-size fields, which older taggers write. Its fields are
- * returned as the ID3v2.3 frames that hold the same data, so both tags map to Sona's tags alike.
+ * returned as the ID3v2.3 frames that hold the same data, so both tags map to sonaudio's tags alike.
  */
 final class Id3v1Reader {
 

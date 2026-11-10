@@ -87,3 +87,11 @@ mavenPublishing {
         }
     }
 }
+
+// A broken doc comment fails the build. Comments may give only a @return, so missing descriptions aren't checked.
+tasks.javadoc {
+    (options as StandardJavadocDocletOptions).apply {
+        addBooleanOption("Xdoclint:all,-missing", true)
+        addBooleanOption("Xwerror", true)
+    }
+}
