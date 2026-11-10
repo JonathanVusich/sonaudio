@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.flac.FlacParser;
+import dev.javax.sonaudio.format.flac.VerbatimFlac;
 import dev.javax.sonaudio.format.mp3.Mp3Parser;
 import dev.javax.sonaudio.samples.FlacAudioSample;
 import dev.javax.sonaudio.samples.Mp3Sample;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.NoSuchElementException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -53,29 +53,8 @@ class AudioUtilsTest {
 
     @Test
     void audioWithNoFramesLastsNoTime() throws IOException, InvalidFormatException {
-        assertThat(AudioUtils.measureDuration(new NoFrames())).isZero();
-    }
+        final var audio = new VerbatimFlac(44100, 16, new int[2][0]).audio();
 
-    private static final class NoFrames implements IntPcmAudio {
-
-        @Override
-        public int sampleRate() {
-            return 44100;
-        }
-
-        @Override
-        public int bitsPerSample() {
-            return 16;
-        }
-
-        @Override
-        public boolean hasNextFrame() {
-            return false;
-        }
-
-        @Override
-        public IntPcmFrame nextFrame() {
-            throw new NoSuchElementException();
-        }
+        assertThat(AudioUtils.measureDuration(audio)).isZero();
     }
 }

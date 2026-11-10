@@ -33,7 +33,7 @@ public final class FlacWriter implements Writer {
     private static final int PICTURE_FIELDS_SIZE = 8 * 4;
     private static final int MD5_SIZE = 16;
 
-    private static final String VENDOR = "Sona";
+    private static final String VENDOR = "sonaudio";
     private static final int DEFAULT_BLOCK_SIZE = 4096;
     private static final int DEFAULT_SAMPLE_RATE = 44_100;
     private static final int DEFAULT_CHANNELS = 2;

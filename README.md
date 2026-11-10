@@ -61,7 +61,8 @@ Parsers and decoders throw `InvalidFormatException` for a file that's malformed,
 
 - `dev.javax.sonaudio.format`: what every format shares: `Parser`, `Writer`, `Format`, and the decoded audio, of one
   kind each: `IntPcmAudio` gives integer frames, as a lossless format decodes to, and `FloatPcmAudio` floating-point
-  ones, as MP3 decodes to. `AudioUtils.measureDuration` measures how long audio plays.
+  ones, as MP3 decodes to. `PcmAudio` is sealed, so a `switch` over a parser's audio needs a case for each kind and
+  no default. `AudioUtils.measureDuration` measures how long audio plays.
 - `dev.javax.sonaudio.format.flac`: FLAC (RFC 9639): its metadata blocks, a decoder that checks each frame's CRCs, and a
   writer of metadata.
 - `dev.javax.sonaudio.format.mp3`: MPEG audio of Layers I, II and III. ID3v2.2 to 2.4 and ID3v1 tags, Xing, Info and

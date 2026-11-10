@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.javax"
-version = "0.1.0-SNAPSHOT"
+version = "0.1.0-RC"
 
 repositories {
     mavenCentral()
@@ -37,7 +37,9 @@ dependencies {
 
 // Warnings fail the build. Sonaudio serializes nothing, so classes need no serialVersionUID.
 tasks.withType<JavaCompile>().configureEach {
-    options.compilerArgs.addAll(listOf("-Xlint:all,-processing,-serial", "-Werror"))
+    // A module compiles with its sources on the source path, so an incremental build reads the files it doesn't
+    // recompile from there, without annotation processing: they need no class files, which they already have.
+    options.compilerArgs.addAll(listOf("-Xlint:all,-processing,-serial", "-Werror", "-implicit:none"))
 }
 
 // Formats the Java sources: `spotlessApply` rewrites them, and `check` (so `build`) fails on any it would change.

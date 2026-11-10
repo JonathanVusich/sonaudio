@@ -4,10 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.IntPcmAudio;
-import dev.javax.sonaudio.format.IntPcmFrame;
+import dev.javax.sonaudio.format.flac.VerbatimFlac;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.NoSuchElementException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -86,7 +85,7 @@ class FingerprintTest {
      */
     private static IntPcmAudio chordAudio(
             final int sampleRate, final int channels, final int bitsPerSample, final int seconds) {
-        return new GeneratedAudio(
+        return generatedAudio(
                 sampleRate,
                 bitsPerSample,
                 channels,
@@ -109,7 +108,7 @@ class FingerprintTest {
     // Chords as in chordAudio under noise that is a hash of each sample's position, so the audio can be made again
     // anywhere and {@code fpcalc} can be given it.
     private static IntPcmAudio noiseAudio(final int sampleRate, final int channels, final int seconds) {
-        return new GeneratedAudio(
+        return generatedAudio(
                 sampleRate,
                 16,
                 channels,
@@ -138,7 +137,7 @@ class FingerprintTest {
     }
 
     private static IntPcmAudio silentAudio(final int sampleRate, final int channels, final int seconds) {
-        return new GeneratedAudio(sampleRate, 16, channels, sampleRate * seconds, (_, _) -> 0);
+        return generatedAudio(sampleRate, 16, channels, sampleRate * seconds, (_, _) -> 0);
     }
 
     @FunctionalInterface
@@ -146,57 +145,19 @@ class FingerprintTest {
         int sample(int index, int channel);
     }
 
-    private static final class GeneratedAudio implements IntPcmAudio {
-
-        private static final int FRAME_SIZE = 4096;
-
-        private final int sampleRate;
-        private final int bitsPerSample;
-        private final int channels;
-        private final int sampleCount;
-        private final SampleSource source;
-        private int next;
-
-        GeneratedAudio(
-                final int sampleRate,
-                final int bitsPerSample,
-                final int channels,
-                final int sampleCount,
-                final SampleSource source) {
-            this.sampleRate = sampleRate;
-            this.bitsPerSample = bitsPerSample;
-            this.channels = channels;
-            this.sampleCount = sampleCount;
-            this.source = source;
-        }
-
-        @Override
-        public int sampleRate() {
-            return sampleRate;
-        }
-
-        @Override
-        public int bitsPerSample() {
-            return bitsPerSample;
-        }
-
-        @Override
-        public boolean hasNextFrame() {
-            return next < sampleCount;
-        }
-
-        @Override
-        public IntPcmFrame nextFrame() {
-            if (!hasNextFrame()) {
-                throw new NoSuchElementException("Audio has no more frames!");
+    // The audio as a FLAC stream would decode it, as all audio is decoded from a file.
+    private static IntPcmAudio generatedAudio(
+            final int sampleRate,
+            final int bitsPerSample,
+            final int channels,
+            final int sampleCount,
+            final SampleSource source) {
+        final var samples = new int[channels][sampleCount];
+        for (var channel = 0; channel < channels; channel++) {
+            for (var index = 0; index < sampleCount; index++) {
+                samples[channel][index] = source.sample(index, channel);
             }
-            final var samples = new int[channels][Math.min(FRAME_SIZE, sampleCount - next)];
-            for (var i = 0; i < samples[0].length; i++, next++) {
-                for (var channel = 0; channel < channels; channel++) {
-                    samples[channel][i] = source.sample(next, channel);
-                }
-            }
-            return new IntPcmFrame(samples, sampleRate);
         }
+        return new VerbatimFlac(sampleRate, bitsPerSample, samples).audio();
     }
 }

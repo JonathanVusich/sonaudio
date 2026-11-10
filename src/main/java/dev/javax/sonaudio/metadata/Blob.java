@@ -15,4 +15,11 @@ public final class Blob {
     public Blob(final byte[] bytes) {
         this.bytes = bytes;
     }
+
+    /**
+     * @return a copy of the bytes
+     */
+    public byte[] bytes() {
+        return bytes.clone();
+    }
 }

@@ -7,7 +7,7 @@ import java.io.IOException;
  * Decoded audio, read a frame at a time, all of one kind: {@link IntPcmAudio} gives integers and {@link FloatPcmAudio}
  * floating-point numbers. It reads its stream once, so each frame can only be read once.
  */
-public interface PcmAudio {
+public sealed interface PcmAudio permits IntPcmAudio, FloatPcmAudio {
 
     /**
      * @return samples per second, per channel

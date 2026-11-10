@@ -1,13 +1,14 @@
 package dev.javax.sonaudio.format;
 
 import dev.javax.sonaudio.exception.InvalidFormatException;
+import dev.javax.sonaudio.format.flac.FlacDecoder;
 import java.io.IOException;
 import java.util.NoSuchElementException;
 
 /**
  * Decoded audio whose frames are integers, as a lossless decoder such as FLAC's makes them.
  */
-public interface IntPcmAudio extends PcmAudio {
+public sealed interface IntPcmAudio extends PcmAudio permits FlacDecoder {
 
     /**
      * @return the next frame
