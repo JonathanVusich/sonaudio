@@ -3,6 +3,7 @@ package dev.javax.sonaudio.format.mp3;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.stream.IntStream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -16,6 +17,16 @@ class ScaleFactorTablesTest {
         assertThat(bandCount(table, BlockLayout.LONG)).isEqualTo(21);
         assertThat(bandCount(table, BlockLayout.SHORT)).isEqualTo(36);
         assertThat(bandCount(table, BlockLayout.MIXED)).isEqualTo(33);
+    }
+
+    // The short bands' scale factors follow the 22 long bands', each band's three windows together.
+    @Test
+    void shortIndexCountsFromTheLongBandsByBandThenWindow() {
+        assertThat(ScaleFactorTables.shortIndex(0, 0)).isEqualTo(22);
+        assertThat(ScaleFactorTables.shortIndex(0, 2)).isEqualTo(24);
+        assertThat(ScaleFactorTables.shortIndex(1, 0)).isEqualTo(25);
+        assertThat(ScaleFactorTables.shortIndex(ScaleFactorBands.SHORT_BANDS - 1, Windowing.WINDOWS - 1))
+                .isEqualTo(ScaleFactors.SIZE - 1);
     }
 
     private static int bandCount(final int table, final BlockLayout layout) {

@@ -34,10 +34,10 @@ public final class ChecksummedByteSource implements ByteSource {
             if (!hasMoreBytes()) {
                 throw new EOFException("Stream ends in the middle of the data being read!");
             }
-            final var b = buffer[position++];
-            destination[i] = b;
+            final var nextByte = buffer[position++];
+            destination[i] = nextByte;
             for (final var checksum : checksums) {
-                checksum.update(b);
+                checksum.update(nextByte);
             }
         }
     }

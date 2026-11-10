@@ -1,16 +1,13 @@
 package dev.javax.sonaudio.metadata;
 
-import java.util.Arrays;
-
 public final class Blob {
 
     private final byte[] bytes;
 
-    private Blob(final byte[] bytes) {
+    /**
+     * @param bytes which the blob keeps: the caller makes them for it and doesn't touch them again
+     */
+    public Blob(final byte[] bytes) {
         this.bytes = bytes;
-    }
-
-    public static Blob copyOf(final byte[] bytes) {
-        return new Blob(Arrays.copyOf(bytes, bytes.length));
     }
 }

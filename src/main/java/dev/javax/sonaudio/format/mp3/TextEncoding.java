@@ -1,11 +1,11 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.IOException;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 /**
  * How an ID3v2 frame encodes its text, given by the frame's first byte (ID3v2.4.0 structure section 4). Text is decoded
@@ -87,7 +87,7 @@ enum TextEncoding {
     }
 
     // A surrogate pair is read a unit at a time, and the string joins them.
-    private static int readUtf16CodeUnit(final BitInputStream bits, final ByteOrder byteOrder) throws IOException {
+    private int readUtf16CodeUnit(final BitInputStream bits, final ByteOrder byteOrder) throws IOException {
         final var codeUnit = (char) bits.readBits(16);
         if (byteOrder == ByteOrder.LITTLE_ENDIAN) {
             return Character.reverseBytes(codeUnit);

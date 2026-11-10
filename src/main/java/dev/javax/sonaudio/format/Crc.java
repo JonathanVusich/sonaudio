@@ -21,12 +21,12 @@ public final class Crc implements Checksum {
     public Crc(final long polynomial, final int width) {
         this.width = width;
         this.mask = (1L << width) - 1;
-        this.table = crcTable(polynomial, width, mask);
+        this.table = CrcUtils.crcTable(polynomial, width);
     }
 
     @Override
-    public void update(final int b) {
-        value = ((value << 8) ^ table[(int) ((value >>> (width - 8)) ^ (b & 0xFF))]) & mask;
+    public void update(final int nextByte) {
+        value = ((value << 8) ^ table[(int) ((value >>> (width - 8)) ^ (nextByte & 0xFF))]) & mask;
     }
 
     @Override
@@ -44,19 +44,5 @@ public final class Crc implements Checksum {
     @Override
     public void reset() {
         value = 0;
-    }
-
-    // The CRC of each byte on its own.
-    private static long[] crcTable(final long polynomial, final int width, final long mask) {
-        final var topBit = 1L << (width - 1);
-        final var table = new long[256];
-        for (var b = 0; b < 256; b++) {
-            var crc = (long) b << (width - 8);
-            for (var bit = 0; bit < 8; bit++) {
-                crc = (crc & topBit) != 0 ? (crc << 1) ^ polynomial : crc << 1;
-            }
-            table[b] = crc & mask;
-        }
-        return table;
     }
 }

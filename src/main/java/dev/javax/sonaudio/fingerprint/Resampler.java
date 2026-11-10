@@ -1,18 +1,19 @@
 package dev.javax.sonaudio.fingerprint;
 
+import static dev.javax.sonaudio.fingerprint.ResamplerUtils.besselI0;
+import static dev.javax.sonaudio.fingerprint.ResamplerUtils.exactPhaseCount;
+import static dev.javax.sonaudio.fingerprint.ResamplerUtils.extendedSample;
+import static dev.javax.sonaudio.fingerprint.ResamplerUtils.greatestCommonDivisor;
+import static dev.javax.sonaudio.fingerprint.ResamplerUtils.sinc;
+
 import java.util.Arrays;
 
 /**
  * Resamples one channel of floating-point audio the way FFmpeg's libswresample does as {@code fpcalc} configures it
  * (16 filter taps for the lower rate, 256 phases, linear interpolation between them, a cutoff at 0.8 of the lower
- * rate's Nyquist frequency and a Kaiser window with beta 9), step for step in single precision. The filter has as many
+ * rate's Nyquist frequency and a Kaiser window with beta 9), with the taps summed in doubles. The filter has as many
  * phases as the two rates need to be exact, up to 256. The samples before the start of the audio are its mirror image,
  * and the end, once it's known, is reflected too.
- *
- * <p>The taps are added up as libswresample's x86 code for processors with FMA3 does, which is what {@code fpcalc}
- * runs on nearly every current x86-64 processor, so the output is bit for bit what it makes there. Its plain C code,
- * used elsewhere, adds the taps in another order and so differs in the last bit of a few samples in a hundred
- * thousand.
  */
 public final class Resampler {
 
@@ -21,9 +22,6 @@ public final class Resampler {
     private static final double CUTOFF = 0.8;
     private static final double KAISER_BETA = 9;
     private static final int FILTER_ALIGNMENT = 8;
-    // FFmpeg's FMA3 code adds the taps in the eight lanes of a vector register.
-    private static final int LANES = 8;
-    private static final int HALF_LANES = LANES / 2;
     // libswresample doubles its increments until one of them reaches this.
     private static final int INCREMENT_LIMIT = 1 << 20;
 
@@ -37,9 +35,6 @@ public final class Resampler {
     private final int incrementQuotient;
     private final int incrementRemainder;
 
-    private final float[] sums = new float[LANES];
-    private final float[] nextSums = new float[LANES];
-
     private enum End {
         OPEN,
         ENDED
@@ -50,10 +45,10 @@ public final class Resampler {
         this.outputRate = outputRate;
         final var factor = Math.min(outputRate * CUTOFF / inputRate, 1.0);
         this.filterLength = evenLength(Math.max((int) Math.ceil(FILTER_SIZE / factor), 1));
-        this.phaseCount = exactPhaseCount(inputRate, outputRate);
+        this.phaseCount = exactPhaseCount(inputRate, outputRate, 1 << PHASE_SHIFT);
         this.filterStride = (filterLength + FILTER_ALIGNMENT - 1) / FILTER_ALIGNMENT * FILTER_ALIGNMENT;
         this.filterBank = filterBank(factor);
-        final var divisor = gcd(outputRate, (long) inputRate * phaseCount);
+        final var divisor = greatestCommonDivisor(outputRate, (long) inputRate * phaseCount);
         var source = (int) (outputRate / divisor);
         var destination = (int) (inputRate * (long) phaseCount / divisor);
         while (destination < INCREMENT_LIMIT && source < INCREMENT_LIMIT) {
@@ -132,22 +127,9 @@ public final class Resampler {
             return outputSample(input, start, index, fraction);
         }
         for (var i = 0; i < filterStride; i++) {
-            window[i] = extended(input, length, start + i);
+            window[i] = extendedSample(input, length, start + i);
         }
         return outputSample(window, 0, index, fraction);
-    }
-
-    private static float extended(final float[] input, final int length, final int position) {
-        var source = position;
-        if (position < 0) {
-            source = -position;
-        } else if (position >= length) {
-            source = 2 * length - 1 - position;
-        }
-        if (source < 0 || source >= length) {
-            return 0;
-        }
-        return input[source];
     }
 
     // How many samples libswresample reflects off the end of the audio, from what it hasn't finished with.
@@ -158,46 +140,29 @@ public final class Resampler {
     // One output sample: the filter for this phase applied to the samples from offset on.
     private float outputSample(final float[] samples, final int offset, final int index, final int fraction) {
         final var row = filterStride * index;
-        accumulate(samples, offset, row, filterLength, sums);
-        fold(sums);
+        final var sum = filteredSum(samples, offset, row, filterLength);
         if (incrementRemainder != 0 || fraction != 0) {
-            return interpolatedSample(samples, offset, row, fraction);
+            return interpolatedSample(samples, offset, row, fraction, sum);
         }
-        return total(sums);
+        return (float) sum;
     }
 
     // The sums of this phase's filter and the next one's, blended by how far between the two the output falls.
-    private float interpolatedSample(final float[] samples, final int offset, final int row, final int fraction) {
-        accumulate(samples, offset, row + filterStride, filterStride, nextSums);
-        fold(nextSums);
-        final var weight = (float) fraction * (1.0f / (float) sourceIncrement);
-        for (var lane = 0; lane < HALF_LANES; lane++) {
-            sums[lane] = Math.fma(nextSums[lane] - sums[lane], weight, sums[lane]);
-        }
-        return total(sums);
+    private float interpolatedSample(
+            final float[] samples, final int offset, final int row, final int fraction, final double sum) {
+        final var next = filteredSum(samples, offset, row + filterStride, filterStride);
+        final var weight = (double) fraction / sourceIncrement;
+        return (float) (sum + (next - sum) * weight);
     }
 
-    // The taps added into eight sums, each of every eighth tap by fused multiply-adds, as FFmpeg's FMA3 code does.
-    // The next phase's filter is summed to the end of its padding, as the last phase's shifted copy of the first has a
-    // tap there.
-    private void accumulate(
-            final float[] samples, final int offset, final int row, final int tapCount, final float[] lanes) {
-        Arrays.fill(lanes, 0f);
+    // The filter's taps applied to the samples from offset on. The next phase's filter is summed to the end of its
+    // padding, as the last phase's shifted copy of the first has a tap there.
+    private double filteredSum(final float[] samples, final int offset, final int row, final int tapCount) {
+        var sum = 0.0;
         for (var i = 0; i < tapCount; i++) {
-            final var lane = i % LANES;
-            lanes[lane] = Math.fma(samples[offset + i], filterBank[row + i], lanes[lane]);
+            sum += (double) samples[offset + i] * filterBank[row + i];
         }
-    }
-
-    // The upper four sums added onto the lower four.
-    private static void fold(final float[] lanes) {
-        for (var lane = 0; lane < HALF_LANES; lane++) {
-            lanes[lane] += lanes[lane + HALF_LANES];
-        }
-    }
-
-    private static float total(final float[] lanes) {
-        return (lanes[0] + lanes[2]) + (lanes[1] + lanes[3]);
+        return sum;
     }
 
     private float[] filterBank(final double factor) {
@@ -265,85 +230,10 @@ public final class Resampler {
         return StrictMath.sin(Math.PI * phase / phaseCount) * parity;
     }
 
-    private static double sinc(final double x, final double sign, final double factor) {
-        if (x == 0) {
-            return 1.0;
-        }
-        if (factor == 1.0) {
-            return sign / x;
-        }
-        return StrictMath.sin(x) / x;
-    }
-
-    // As many phases as the rates make exact, if that's under the 256 asked for.
-    private static int exactPhaseCount(final int inputRate, final int outputRate) {
-        final var exact = outputRate / gcd(outputRate, inputRate);
-        if (exact <= 1 << PHASE_SHIFT) {
-            return (int) exact;
-        }
-        return 1 << PHASE_SHIFT;
-    }
-
     private static int evenLength(final int length) {
         if (length > 1) {
             return (length + 1) / 2 * 2;
         }
         return length;
     }
-
-    private static long gcd(final long a, final long b) {
-        var larger = a;
-        var smaller = b;
-        while (smaller != 0) {
-            final var remainder = larger % smaller;
-            larger = smaller;
-            smaller = remainder;
-        }
-        return larger;
-    }
-
-    // FFmpeg's av_bessel_i0 for the arguments up to 15 a Kaiser window of beta 9 gives it: Blair and Edwards' minimax
-    // rational approximation.
-    private static double besselI0(final double x) {
-        if (x == 0) {
-            return 1.0;
-        }
-        final var y = Math.abs(x) * Math.abs(x);
-        return evaluate(BESSEL_NUMERATOR, y) / evaluate(BESSEL_DENOMINATOR, y);
-    }
-
-    private static double evaluate(final double[] coefficients, final double x) {
-        var sum = coefficients[coefficients.length - 1];
-        for (var i = coefficients.length - 2; i >= 0; i--) {
-            sum *= x;
-            sum += coefficients[i];
-        }
-        return sum;
-    }
-
-    private static final double[] BESSEL_NUMERATOR = {
-        -2.2335582639474375249e+15,
-        -5.5050369673018427753e+14,
-        -3.2940087627407749166e+13,
-        -8.4925101247114157499e+11,
-        -1.1912746104985237192e+10,
-        -1.0313066708737980747e+08,
-        -5.9545626019847898221e+05,
-        -2.4125195876041896775e+03,
-        -7.0935347449210549190e+00,
-        -1.5453977791786851041e-02,
-        -2.5172644670688975051e-05,
-        -3.0517226450451067446e-08,
-        -2.6843448573468483278e-11,
-        -1.5982226675653184646e-14,
-        -5.2487866627945699800e-18,
-    };
-    private static final double[] BESSEL_DENOMINATOR = {
-        -2.2335582639474375245e+15,
-        7.8858692566751002988e+12,
-        -1.2207067397808979846e+10,
-        1.0377081058062166144e+07,
-        -4.8527560179962773045e+03,
-        1.0,
-    };
 }

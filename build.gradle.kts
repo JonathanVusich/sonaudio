@@ -2,6 +2,7 @@ plugins {
     id("java-library")
     id("signing")
     id("com.vanniktech.maven.publish").version("0.36.0")
+    id("com.diffplug.spotless").version("8.10.4")
 }
 
 group = "dev.javax"
@@ -12,7 +13,6 @@ repositories {
 }
 
 java {
-    // The foreign function API is final from Java 22.
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
     }
@@ -30,14 +30,25 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.assertj:assertj-core:3.27.7")
     testImplementation("org.apache.commons:commons-compress:1.28.0")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.0")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+// Warnings fail the build. Sonaudio serializes nothing, so classes need no serialVersionUID.
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.addAll(listOf("-Xlint:all,-processing,-serial", "-Werror"))
+}
+
+// Formats the Java sources: `spotlessApply` rewrites them, and `check` (so `build`) fails on any it would change.
+spotless {
+    java {
+        palantirJavaFormat("2.102.0")
+    }
+}
+
 tasks.test {
     useJUnitPlatform()
-    // The tests load FFmpeg's shared libraries, which a container has (see the Dockerfile).
-    jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
 signing {
@@ -50,7 +61,7 @@ mavenPublishing {
 
     pom {
         name.set("sonaudio")
-        description.set("Reads tags, duration and decoded audio from any format through FFmpeg's shared libraries")
+        description.set("Hand-written FLAC and MP3 readers, a tag model and Chromaprint fingerprints for audio files")
         url.set("https://github.com/JonathanVusich/sonaudio")
 
         licenses {

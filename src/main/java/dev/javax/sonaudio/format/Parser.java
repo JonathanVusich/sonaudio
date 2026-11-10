@@ -1,8 +1,8 @@
 package dev.javax.sonaudio.format;
 
+import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.IOException;
 import java.nio.channels.SeekableByteChannel;
-import dev.javax.sonaudio.exception.InvalidFormatException;
 
 public interface Parser {
 

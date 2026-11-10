@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 /**
  * A granule's 576 frequency lines for one channel: its Huffman-coded values, requantized (ISO/IEC 11172-3 sections
- * 2.4.3.4.4 to 2.4.3.4.7) as FFmpeg's floating-point decoder requantizes them, from its tables, in 32-bit floats. A
+ * 2.4.3.4.4 to 2.4.3.4.7) to 32-bit floats, as FFmpeg's floating-point decoder holds them. A
  * short block's lines are in the order they're coded: by band, then window. The decoder keeps one per channel, and
  * reads each granule into it in place, as it runs for every granule of the file.
  */
@@ -44,7 +44,7 @@ final class Spectrum {
      *
      * @param presentBits how many bits the file has for the channel, from where its scale factors start
      */
-    void read(
+    void readGranule(
             final BitInputStream bits,
             final FrameHeader header,
             final GranuleChannel granuleChannel,
@@ -68,7 +68,7 @@ final class Spectrum {
     /**
      * Makes every line 0, for a granule whose bits start before the stream's main data does.
      */
-    void clear() {
+    void clearLines() {
         Arrays.fill(lines, 0);
         nonZeroEnd = 0;
     }
@@ -106,20 +106,24 @@ final class Spectrum {
             return;
         }
         final var bands = ScaleFactorBands.fromSampleRate(header.sampleRate());
-        final var firstBand = firstShortBand(layout);
+        final var firstBand = layout.firstShortBand();
         var start = Windowing.WINDOWS * bands.shortBandStart(firstBand);
         for (var band = firstBand; band < ScaleFactorBands.SHORT_BANDS; band++) {
             final var width = bands.shortBandWidth(band);
-            for (var line = 0; line < width; line++) {
-                for (var window = 0; window < Windowing.WINDOWS; window++) {
-                    reorderBuffer[Windowing.WINDOWS * line + window] = lines[start + window * width + line];
-                }
-            }
-            System.arraycopy(reorderBuffer, 0, lines, start, Windowing.WINDOWS * width);
+            reorderShortBand(start, width);
             start += Windowing.WINDOWS * width;
         }
         // Lines move up from the windows above, so any may now not be 0.
         nonZeroEnd = LINES;
+    }
+
+    private void reorderShortBand(final int start, final int width) {
+        for (var line = 0; line < width; line++) {
+            for (var window = 0; window < Windowing.WINDOWS; window++) {
+                reorderBuffer[Windowing.WINDOWS * line + window] = lines[start + window * width + line];
+            }
+        }
+        System.arraycopy(reorderBuffer, 0, lines, start, Windowing.WINDOWS * width);
     }
 
     /**
@@ -133,15 +137,21 @@ final class Spectrum {
             case SHORT -> 0;
         };
         for (var boundary = 1; boundary <= boundaries; boundary++) {
-            final var first = SUBBAND_LINES * boundary;
-            for (var butterfly = 0; butterfly < AliasCoefficients.COUNT; butterfly++) {
-                final var below = lines[first - 1 - butterfly];
-                final var above = lines[first + butterfly];
-                final var cs = AliasCoefficients.floatCs(butterfly);
-                final var ca = AliasCoefficients.floatCa(butterfly);
-                lines[first - 1 - butterfly] = below * cs - above * ca;
-                lines[first + butterfly] = below * ca + above * cs;
-            }
+            reduceBoundaryAliasing(SUBBAND_LINES * boundary);
+        }
+    }
+
+    /**
+     * @param first the first line above the boundary
+     */
+    private void reduceBoundaryAliasing(final int first) {
+        for (var butterfly = 0; butterfly < AliasCoefficients.COUNT; butterfly++) {
+            final var below = lines[first - 1 - butterfly];
+            final var above = lines[first + butterfly];
+            final var cs = AliasCoefficients.cs(butterfly);
+            final var ca = AliasCoefficients.ca(butterfly);
+            lines[first - 1 - butterfly] = below * cs - above * ca;
+            lines[first + butterfly] = below * ca + above * cs;
         }
     }
 
@@ -150,12 +160,7 @@ final class Spectrum {
         final var bands = ScaleFactorBands.fromSampleRate(header.sampleRate());
         final var gain = granuleChannel.globalGain() - GAIN_OFFSET - midSideGain(header);
         final var shift = granuleChannel.scalefacScale() + 1;
-        final var longEnd = longBandsEnd(header, granuleChannel.windowing().layout());
-        for (var band = 0; band < longEnd; band++) {
-            final var factor =
-                    scaleFactors.longFactor(band) + granuleChannel.preflag() * ScaleFactorTables.pretab(band);
-            fillExponent(bands.longBandStart(band), bands.longBandWidth(band), gain - (factor << shift));
-        }
+        computeLongExponents(header, bands, granuleChannel, scaleFactors, gain);
         switch (granuleChannel.windowing()) {
             case Windowing.Normal _ -> {}
             case Windowing.Switched switched -> {
@@ -163,6 +168,21 @@ final class Spectrum {
                     computeShortExponents(bands, switched, gain, shift, scaleFactors);
                 }
             }
+        }
+    }
+
+    private void computeLongExponents(
+            final FrameHeader header,
+            final ScaleFactorBands bands,
+            final GranuleChannel granuleChannel,
+            final ScaleFactors scaleFactors,
+            final int gain) {
+        final var shift = granuleChannel.scalefacScale() + 1;
+        final var longEnd = granuleChannel.windowing().layout().longBandCount(header.version());
+        for (var band = 0; band < longEnd; band++) {
+            final var factor =
+                    scaleFactors.longFactor(band) + granuleChannel.preflag() * ScaleFactorTables.pretab(band);
+            fillExponent(bands.longBandStart(band), bands.longBandWidth(band), gain - (factor << shift));
         }
     }
 
@@ -181,7 +201,7 @@ final class Spectrum {
             final int gain,
             final int shift,
             final ScaleFactors scaleFactors) {
-        final var firstBand = firstShortBand(switched.layout());
+        final var firstBand = switched.layout().firstShortBand();
         var line = 3 * bands.shortBandStart(firstBand);
         for (var band = firstBand; band < ScaleFactorBands.SHORT_BANDS; band++) {
             final var width = bands.shortBandWidth(band);
@@ -195,21 +215,6 @@ final class Spectrum {
 
     private void fillExponent(final int start, final int width, final int exponent) {
         Arrays.fill(exponents, start, start + width, exponent + EXPONENT_OFFSET);
-    }
-
-    private static int longBandsEnd(final FrameHeader header, final BlockLayout layout) {
-        return switch (layout) {
-            case LONG -> ScaleFactorBands.LONG_BANDS;
-            case SHORT -> 0;
-            case MIXED -> header.version().mixedLongBands();
-        };
-    }
-
-    private static int firstShortBand(final BlockLayout layout) {
-        return switch (layout) {
-            case LONG, SHORT -> 0;
-            case MIXED -> ScaleFactors.MIXED_FIRST_SHORT_BAND;
-        };
     }
 
     /**
@@ -245,17 +250,10 @@ final class Spectrum {
         final var region2Band =
                 Math.min(normal.region0Count() + normal.region1Count() + 2, ScaleFactorBands.LONG_BANDS);
         final var region2 = Math.max(Math.min(bands.longBandStart(region2Band), end), region1);
-        final var region0Bits = readRegion(bits, HuffmanTables.bigValueTable(normal.table0()), 0, region1, available);
-        final var region1Bits = readRegion(
-                bits, HuffmanTables.bigValueTable(normal.table1()), region1, region2, available - region0Bits);
-        return region0Bits
-                + region1Bits
-                + readRegion(
-                        bits,
-                        HuffmanTables.bigValueTable(normal.table2()),
-                        region2,
-                        end,
-                        available - region0Bits - region1Bits);
+        final var region0Bits = readRegion(bits, normal.table0(), 0, region1, available);
+        final var region1Bits = readRegion(bits, normal.table1(), region1, region2, available - region0Bits);
+        final var region2Bits = readRegion(bits, normal.table2(), region2, end, available - region0Bits - region1Bits);
+        return region0Bits + region1Bits + region2Bits;
     }
 
     // The first region takes 8 long bands, or 3 short bands of three windows, and the second takes the rest.
@@ -271,16 +269,16 @@ final class Spectrum {
             case NORMAL, START, STOP -> bands.longBandStart(8);
         };
         final var region1 = Math.min(region1Start, end);
-        final var region0Bits = readRegion(bits, HuffmanTables.bigValueTable(switched.table0()), 0, region1, available);
-        return region0Bits
-                + readRegion(
-                        bits, HuffmanTables.bigValueTable(switched.table1()), region1, end, available - region0Bits);
+        final var region0Bits = readRegion(bits, switched.table0(), 0, region1, available);
+        final var region1Bits = readRegion(bits, switched.table1(), region1, end, available - region0Bits);
+        return region0Bits + region1Bits;
     }
 
     // Each codeword codes a pair of values, x and y. A pair is read whole when it starts before the bits run out.
     private int readRegion(
-            final BitInputStream bits, final BigValueTable table, final int start, final int end, final int available)
+            final BitInputStream bits, final int tableSelect, final int start, final int end, final int available)
             throws IOException {
+        final var table = HuffmanTables.bigValueTable(tableSelect);
         var bitsRead = 0;
         for (var line = start; line < end && bitsRead < available; line += 2) {
             final var pair = table.code().readValue(bits);
@@ -306,7 +304,7 @@ final class Spectrum {
             return 0;
         }
         if (magnitude < LINBITS_VALUE) {
-            lines[line] = signed(bits, FfmpegTables.requantized(exponent, magnitude));
+            lines[line] = signed(bits, Requantization.requantized(exponent, magnitude));
             return 1;
         }
         final var linbits = table.linbits();
@@ -314,7 +312,7 @@ final class Spectrum {
         if (linbits > 0) {
             value += (int) bits.readBits(linbits);
         }
-        lines[line] = signed(bits, FfmpegTables.requantizedLarge(value, exponent));
+        lines[line] = signed(bits, Requantization.requantized(exponent, value));
         return linbits + 1;
     }
 
@@ -338,9 +336,7 @@ final class Spectrum {
                 break;
             }
             code.readValue(bits);
-            for (var value = 0; value < QUAD; value++) {
-                lines[line + value] = readCount1Value(bits, quad >> (QUAD - 1 - value) & 1, line + value);
-            }
+            readQuad(bits, quad, line);
             left -= quadBits;
             presentLeft -= quadBits;
             line += QUAD;
@@ -348,15 +344,22 @@ final class Spectrum {
         return line;
     }
 
+    // The quadruple's bits are its values, the first the highest.
+    private void readQuad(final BitInputStream bits, final int quad, final int start) throws IOException {
+        for (var value = 0; value < QUAD; value++) {
+            lines[start + value] = readCount1Value(bits, quad >> (QUAD - 1 - value) & 1, start + value);
+        }
+    }
+
     private float readCount1Value(final BitInputStream bits, final int magnitude, final int line) throws IOException {
         if (magnitude == 0) {
             return 0;
         }
-        return signed(bits, FfmpegTables.requantizedOne(exponents[line]));
+        return signed(bits, Requantization.requantized(exponents[line], 1));
     }
 
     // A sign bit of 1 is negative.
-    private static float signed(final BitInputStream bits, final float value) throws IOException {
+    private float signed(final BitInputStream bits, final float value) throws IOException {
         if (bits.readBits(1) == 1) {
             return -value;
         }

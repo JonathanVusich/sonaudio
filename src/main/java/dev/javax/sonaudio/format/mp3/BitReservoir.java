@@ -1,12 +1,12 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
+import dev.javax.sonaudio.format.StreamUtils;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteOrder;
 import java.util.Arrays;
-import dev.javax.sonaudio.format.StreamUtils;
 
 /**
  * Layer III's bit reservoir (ISO/IEC 11172-3 section 2.4.3.4.1.1): a frame's main data may start in the main data of
@@ -54,7 +54,7 @@ final class BitReservoir {
      *
      * @param input the frame's stream, at its main data
      */
-    void restart(final InputStream input, final FrameHeader header) throws IOException {
+    void restartWithFrame(final InputStream input, final FrameHeader header) throws IOException {
         StreamUtils.readFully(input, bytes, 0, header.mainDataSize());
         size = header.mainDataSize();
         keepLast(Math.min(BACKSTEP, size));
@@ -79,9 +79,11 @@ final class BitReservoir {
             return;
         }
         // The old bytes FFmpeg keeps only when there are no more than 512 of them.
-        final var oldBytes = frameStart - end;
-        final var start = oldBytes <= BACKSTEP ? end : frameStart;
-        keepLast(size - start);
+        if (frameStart - end <= BACKSTEP) {
+            keepLast(size - end);
+            return;
+        }
+        keepLast(size - frameStart);
     }
 
     private void keepLast(final int count) {
@@ -93,7 +95,7 @@ final class BitReservoir {
      * @param bitOffset how many bits after the frame's granules start to read from
      * @return how many bits the file has from there to the end of the frame's main data
      */
-    int presentBitsAt(final Mp3Frame frame, final int bitOffset) {
+    int presentGranuleBits(final Mp3Frame frame, final int bitOffset) {
         final var position = frame.granulesStart() * Byte.SIZE + bitOffset;
         if (position < (size - frame.header().mainDataSize()) * Byte.SIZE) {
             return Integer.MAX_VALUE;
@@ -105,7 +107,7 @@ final class BitReservoir {
      * @param bitOffset how many bits after the frame's granules start to read from, which must be in the reservoir
      * @return the reservoir's bits from there, then zeros
      */
-    BitInputStream bitsAt(final Mp3Frame frame, final int bitOffset) throws IOException {
+    BitInputStream granuleBits(final Mp3Frame frame, final int bitOffset) throws IOException {
         final var position = frame.granulesStart() * Byte.SIZE + bitOffset;
         final var start = position / Byte.SIZE;
         final var bits = BitInputStream.wrap(

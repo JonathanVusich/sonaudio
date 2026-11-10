@@ -67,4 +67,12 @@ final class ScaleFactorTables {
     static int pretab(final int band) {
         return PRETAB[band];
     }
+
+    /**
+     * @return where a short band's scale factor for the window is among a granule's {@link ScaleFactors}: after the long
+     *     bands', by band and then window
+     */
+    static int shortIndex(final int band, final int window) {
+        return ScaleFactorBands.LONG_BANDS + band * Windowing.WINDOWS + window;
+    }
 }

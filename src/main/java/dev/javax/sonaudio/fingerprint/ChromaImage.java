@@ -1,7 +1,5 @@
 package dev.javax.sonaudio.fingerprint;
 
-import java.util.Arrays;
-
 /**
  * How a signal's energy spreads over the twelve notes of the octave as it plays: a row per overlapping frame of the
  * signal, a column per note, as Chromaprint computes it. Each row is smoothed with its neighbours and normalised.
@@ -21,6 +19,10 @@ public final class ChromaImage {
     private static final double SILENCE = 0.01;
 
     private static final float[] WINDOW = hammingWindow();
+    // The frequency bins of the spectrum Chromaprint reads, from the first to the one after the last.
+    private static final int FIRST_BIN = Math.max(1, binOfFrequency(MIN_FREQUENCY));
+    private static final int END_BIN = Math.min(FRAME_SIZE / 2, binOfFrequency(MAX_FREQUENCY));
+    // The note each of those bins adds to, from the first.
     private static final int[] NOTES = noteOfEachBin();
 
     private final double[][] rows;
@@ -39,7 +41,7 @@ public final class ChromaImage {
         return rows[row][band];
     }
 
-    private static double[][] chromaRows(final Signal signal) {
+    private double[][] chromaRows(final Signal signal) {
         final var fft = new Fft(FRAME_SIZE);
         final var frameCount = Math.max(0, (signal.sampleCount() - FRAME_SIZE) / FRAME_STEP + 1);
         final var rows = new double[frameCount][];
@@ -53,7 +55,7 @@ public final class ChromaImage {
     }
 
     // The window and the product are single precision, as Chromaprint's are.
-    private static void windowFrame(final Signal signal, final int start, final float[] frame) {
+    private void windowFrame(final Signal signal, final int start, final float[] frame) {
         for (var i = 0; i < FRAME_SIZE; i++) {
             frame[i] = signal.sample(start + i) * WINDOW[i];
         }
@@ -61,11 +63,8 @@ public final class ChromaImage {
 
     private static double[] noteEnergies(final PowerSpectrum spectrum) {
         final var energies = new double[BANDS];
-        for (var bin = 0; bin < NOTES.length; bin++) {
-            final var note = NOTES[bin];
-            if (note >= 0) {
-                energies[note] += spectrum.power(bin);
-            }
+        for (var bin = FIRST_BIN; bin < END_BIN; bin++) {
+            energies[NOTES[bin - FIRST_BIN]] += spectrum.power(bin);
         }
         return energies;
     }
@@ -113,16 +112,12 @@ public final class ChromaImage {
         return window;
     }
 
-    // The note each frequency bin of the spectrum adds to, or -1 for those outside the range Chromaprint reads.
     private static int[] noteOfEachBin() {
-        final var notes = new int[FRAME_SIZE / 2 + 1];
-        Arrays.fill(notes, -1);
-        final var firstBin = Math.max(1, binOfFrequency(MIN_FREQUENCY));
-        final var endBin = Math.min(FRAME_SIZE / 2, binOfFrequency(MAX_FREQUENCY));
-        for (var bin = firstBin; bin < endBin; bin++) {
+        final var notes = new int[END_BIN - FIRST_BIN];
+        for (var bin = FIRST_BIN; bin < END_BIN; bin++) {
             final var frequency = (double) bin * Signal.SAMPLE_RATE / FRAME_SIZE;
             final var octaves = Math.log(frequency / OCTAVE_BASE) / Math.log(2);
-            notes[bin] = (int) (BANDS * (octaves - Math.floor(octaves)));
+            notes[bin - FIRST_BIN] = (int) (BANDS * (octaves - Math.floor(octaves)));
         }
         return notes;
     }

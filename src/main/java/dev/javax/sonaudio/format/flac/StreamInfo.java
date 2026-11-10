@@ -1,8 +1,8 @@
 package dev.javax.sonaudio.format.flac;
 
-import java.time.Duration;
 import dev.javax.sonaudio.format.AudioUtils;
 import dev.javax.sonaudio.format.MD5Checksum;
+import java.time.Duration;
 
 public record StreamInfo(
         BlockHeader header,

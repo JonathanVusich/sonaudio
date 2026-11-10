@@ -1,7 +1,5 @@
 package dev.javax.sonaudio.format.mp3;
 
-import dev.javax.sonaudio.exception.InvalidFormatException;
-
 /**
  * The MPEG audio versions an MP3's frames may be in: MPEG-1 (ISO/IEC 11172-3), MPEG-2's lower sample rates (ISO/IEC
  * 13818-3), and the unofficial MPEG-2.5's lower ones still.
@@ -10,9 +8,6 @@ public enum MpegVersion {
     MPEG_1(new int[] {44100, 48000, 32000}, Bitrates.MPEG_1),
     MPEG_2(new int[] {22050, 24000, 16000}, Bitrates.LSF),
     MPEG_2_5(new int[] {11025, 12000, 8000}, Bitrates.LSF);
-
-    private static final int RESERVED_SAMPLE_RATE = 3;
-    private static final int INVALID_BITRATE = 15;
 
     private final int[] sampleRates;
     // Each layer's bitrates in kbit/s, by the header's bitrate index. Index 0 is free format, and 15 is invalid.
@@ -24,14 +19,14 @@ public enum MpegVersion {
     }
 
     /**
-     * @param versionBits a frame header's version field
+     * @param versionBits a frame header's version field, which the header's parser has checked isn't the reserved one
      */
-    public static MpegVersion fromBits(final int versionBits) throws InvalidFormatException {
+    public static MpegVersion fromBits(final int versionBits) {
         return switch (versionBits) {
             case 0b00 -> MPEG_2_5;
             case 0b10 -> MPEG_2;
             case 0b11 -> MPEG_1;
-            default -> throw new InvalidFormatException("MP3 frame's MPEG version is reserved!");
+            default -> throw new IllegalArgumentException("MPEG version %d is reserved".formatted(versionBits));
         };
     }
 
@@ -46,23 +41,17 @@ public enum MpegVersion {
     }
 
     /**
-     * @param index a frame header's sample rate index, of which 3 is reserved
+     * @param index a frame header's sample rate index, other than 3, which is reserved
      */
-    public int sampleRate(final int index) throws InvalidFormatException {
-        if (index == RESERVED_SAMPLE_RATE) {
-            throw new InvalidFormatException("MP3 frame's sample rate is reserved!");
-        }
+    public int sampleRate(final int index) {
         return sampleRates[index];
     }
 
     /**
-     * @param index a frame header's bitrate index, of which 15 is invalid
+     * @param index a frame header's bitrate index, other than 15, which is invalid
      * @return the bitrate in bits per second, or {@link FrameHeader#FREE_FORMAT_BITRATE} for index 0, free format
      */
-    public int bitrate(final Layer layer, final int index) throws InvalidFormatException {
-        if (index == INVALID_BITRATE) {
-            throw new InvalidFormatException("MP3 frame's bitrate index is invalid!");
-        }
+    public int bitrate(final Layer layer, final int index) {
         return bitrates[layer.ordinal()][index] * 1000;
     }
 
