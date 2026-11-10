@@ -1,8 +1,8 @@
 plugins {
     id("java-library")
     id("signing")
-    id("com.vanniktech.maven.publish").version("0.36.0")
-    id("com.diffplug.spotless").version("8.10.4")
+    id("com.vanniktech.maven.publish").version("0.37.0")
+    id("com.diffplug.spotless").version("8.11.0")
 }
 
 group = "dev.javax"
@@ -21,16 +21,16 @@ java {
 dependencies {
     implementation("dev.javax:bitstream:0.2.0-RC")
 
-    compileOnly("org.projectlombok:lombok:1.18.46")
-    annotationProcessor("org.projectlombok:lombok:1.18.46")
-    testCompileOnly("org.projectlombok:lombok:1.18.46")
-    testAnnotationProcessor("org.projectlombok:lombok:1.18.46")
+    compileOnly("org.projectlombok:lombok:1.18.48")
+    annotationProcessor("org.projectlombok:lombok:1.18.48")
+    testCompileOnly("org.projectlombok:lombok:1.18.48")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.48")
 
-    testImplementation(platform("org.junit:junit-bom:5.10.0"))
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.assertj:assertj-core:3.27.7")
     testImplementation("org.apache.commons:commons-compress:1.28.0")
-    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.0")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.1")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
@@ -43,7 +43,7 @@ tasks.withType<JavaCompile>().configureEach {
 // Formats the Java sources: `spotlessApply` rewrites them, and `check` (so `build`) fails on any it would change.
 spotless {
     java {
-        palantirJavaFormat("2.102.0")
+        palantirJavaFormat("2.103.0")
     }
 }
 
