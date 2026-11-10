@@ -2,7 +2,7 @@ package dev.javax.sonaudio.format.flac;
 
 // https://www.rfc-editor.org/rfc/rfc9639.html#name-picture
 // Declared in the order of the RFC's picture type table: each constant's ordinal is its value.
-public enum PictureType {
+enum PictureType {
     OTHER,
     FILE_ICON_32X32,
     FILE_ICON,

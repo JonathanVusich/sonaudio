@@ -3,10 +3,10 @@ package dev.javax.sonaudio.format;
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import java.io.IOException;
 import java.time.Duration;
-import lombok.experimental.UtilityClass;
 
-@UtilityClass
 public final class AudioUtils {
+
+    private AudioUtils() {}
 
     /**
      * @param samples per channel

@@ -11,7 +11,7 @@ package dev.javax.sonaudio.fingerprint;
  * @param middleThreshold the response from which the filter gives 2
  * @param highThreshold the response from which the filter gives 3
  */
-public record Classifier(
+record Classifier(
         FilterShape shape,
         int firstBand,
         int bands,

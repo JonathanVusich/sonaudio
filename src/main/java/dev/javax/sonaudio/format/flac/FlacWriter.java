@@ -35,6 +35,11 @@ public final class FlacWriter implements Writer {
     private static final int DEFAULT_CHANNELS = 2;
     private static final int DEFAULT_BITS_PER_SAMPLE = 16;
 
+    /**
+     * Makes a writer, which keeps no state between files, so one can write every FLAC file, from any thread.
+     */
+    public FlacWriter() {}
+
     @Override
     public Format format() {
         return Format.FLAC;

@@ -2,10 +2,10 @@ package dev.javax.sonaudio.format.flac;
 
 import dev.javax.bitstream.BitInputStream;
 import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.format.FieldUtils;
 import dev.javax.sonaudio.format.Format;
 import dev.javax.sonaudio.format.MD5Checksum;
 import dev.javax.sonaudio.format.Parser;
+import dev.javax.sonaudio.internal.FieldUtils;
 import dev.javax.sonaudio.metadata.RawMetadata;
 import dev.javax.sonaudio.metadata.RawMetadataBuilder;
 import java.io.DataInputStream;
@@ -27,6 +27,11 @@ public final class FlacParser implements Parser {
 
     static final int MEDIA_CATALOG_NUMBER_SIZE = 128;
     static final int ISRC_SIZE = 12;
+
+    /**
+     * Makes a parser, which keeps no state between files, so one can parse every FLAC file, from any thread.
+     */
+    public FlacParser() {}
 
     @Override
     public Format format() {

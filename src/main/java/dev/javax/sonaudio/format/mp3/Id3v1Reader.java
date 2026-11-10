@@ -1,8 +1,8 @@
 package dev.javax.sonaudio.format.mp3;
 
 import dev.javax.bitstream.BitInputStream;
-import dev.javax.sonaudio.format.FieldUtils;
 import dev.javax.sonaudio.format.mp3.Id3Frame.TextFrame;
+import dev.javax.sonaudio.internal.FieldUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteOrder;

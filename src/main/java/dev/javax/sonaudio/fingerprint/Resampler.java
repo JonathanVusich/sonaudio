@@ -15,7 +15,7 @@ import java.util.Arrays;
  * phases as the two rates need to be exact, up to 256. The samples before the start of the audio are its mirror image,
  * and the end, once it's known, is reflected too.
  */
-public final class Resampler {
+final class Resampler {
 
     private static final int FILTER_SIZE = 16;
     private static final int PHASE_SHIFT = 8;

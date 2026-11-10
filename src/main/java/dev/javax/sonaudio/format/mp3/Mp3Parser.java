@@ -78,6 +78,11 @@ public final class Mp3Parser implements Parser {
     private final Id3v1Reader id3v1Reader = new Id3v1Reader();
     private final VbrHeaderReader vbrHeaderReader = new VbrHeaderReader();
 
+    /**
+     * Makes a parser, which keeps no state between files, so one can parse every MP3, from any thread.
+     */
+    public Mp3Parser() {}
+
     @Override
     public Format format() {
         return Format.MP3;

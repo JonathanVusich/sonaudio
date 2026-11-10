@@ -2,8 +2,6 @@ package dev.javax.sonaudio.format.flac;
 
 import dev.javax.bitstream.BitInputStream;
 import dev.javax.sonaudio.exception.InvalidFormatException;
-import dev.javax.sonaudio.format.ChecksummedByteSource;
-import dev.javax.sonaudio.format.Crc;
 import dev.javax.sonaudio.format.IntPcmAudio;
 import dev.javax.sonaudio.format.IntPcmFrame;
 import java.io.EOFException;

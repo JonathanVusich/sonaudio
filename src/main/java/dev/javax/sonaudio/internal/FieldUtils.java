@@ -1,4 +1,4 @@
-package dev.javax.sonaudio.format;
+package dev.javax.sonaudio.internal;
 
 import dev.javax.bitstream.BitInputStream;
 import java.io.IOException;

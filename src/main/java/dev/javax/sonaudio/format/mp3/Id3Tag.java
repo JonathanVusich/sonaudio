@@ -16,7 +16,7 @@ import lombok.RequiredArgsConstructor;
  */
 @RequiredArgsConstructor
 @Getter
-public enum Id3Tag {
+enum Id3Tag {
     ARTIST("TPE1", Tag.TRACK_ARTIST),
     ALBUM_ARTIST("TPE2", Tag.ALBUM_ARTIST),
     TITLE("TIT2", Tag.TRACK_TITLE),

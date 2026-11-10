@@ -3,7 +3,7 @@ package dev.javax.sonaudio.fingerprint;
 /**
  * Sums a {@link ChromaImage} up to each row and band, so that the sum of any rectangle of it takes four lookups.
  */
-public final class IntegralImage {
+final class IntegralImage {
 
     // sums[row][band] is the sum of every value up to that row and band, both included.
     private final double[][] sums;

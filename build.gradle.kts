@@ -19,7 +19,7 @@ java {
 }
 
 dependencies {
-    api("dev.javax:bitstream:0.2.0-RC")
+    implementation("dev.javax:bitstream:0.2.0-RC")
 
     compileOnly("org.projectlombok:lombok:1.18.46")
     annotationProcessor("org.projectlombok:lombok:1.18.46")

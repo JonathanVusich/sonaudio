@@ -10,7 +10,7 @@ import java.io.IOException;
  * most. It brings the audio there with the filter FFmpeg's libswresample uses for {@code fpcalc} (see
  * {@link Resampler}), so the samples match {@code fpcalc}'s to within rounding.
  */
-public final class Signal {
+final class Signal {
 
     public static final int SAMPLE_RATE = 11025;
 
