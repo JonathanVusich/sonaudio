@@ -12,11 +12,11 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
- * The ID3v2.3 and ID3v2.4 text frames that hold Sona's tags, as Picard writes them.
+ * The ID3v2.3 and ID3v2.4 text frames that hold sonaudio's tags, as Picard writes them.
  */
 @RequiredArgsConstructor
 @Getter
-public enum Id3Tag {
+enum Id3Tag {
     ARTIST("TPE1", Tag.TRACK_ARTIST),
     ALBUM_ARTIST("TPE2", Tag.ALBUM_ARTIST),
     TITLE("TIT2", Tag.TRACK_TITLE),
@@ -51,7 +51,7 @@ public enum Id3Tag {
     }
 
     /**
-     * @return the tag a text frame holds, which Sona keeps under its frame ID when it isn't one of Sona's
+     * @return the tag a text frame holds, which sonaudio keeps under its frame ID when it isn't one of sonaudio's
      */
     static FrameTag frameTag(final String frameId) {
         final var id3Tag = TAGS.get(frameId);

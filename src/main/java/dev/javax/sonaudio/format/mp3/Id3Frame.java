@@ -3,7 +3,7 @@ package dev.javax.sonaudio.format.mp3;
 import java.util.List;
 
 /**
- * A frame of an ID3 tag that Sona reads. Frames of any other kind (pictures, comments, ...) are skipped.
+ * A frame of an ID3 tag that sonaudio reads. Frames of any other kind (pictures, comments, ...) are skipped.
  */
 sealed interface Id3Frame permits Id3Frame.TextFrame, Id3Frame.UserTextFrame, Id3Frame.UniqueFileId {
 

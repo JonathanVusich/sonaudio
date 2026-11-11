@@ -15,11 +15,19 @@ public final class RawMetadata {
     private final Map<Tag, Set<TagValue>> definedTags;
     private final Map<String, Set<TagValue>> unknownTags;
 
+    /**
+     * Makes metadata with no tags.
+     *
+     * @param duration how long the file's header says its audio plays
+     */
     public RawMetadata(final Duration duration) {
         this(duration, Map.of(), Map.of());
     }
 
     /**
+     * Makes metadata of the tags given, which it keeps rather than copies.
+     *
+     * @param duration how long the file's header says its audio plays
      * @param definedTags each known tag's values, in the order they were read, which no one else changes
      * @param unknownTags each other tag's values, in the order they were read, which no one else changes
      */
@@ -32,14 +40,31 @@ public final class RawMetadata {
         this.unknownTags = unknownTags;
     }
 
+    /**
+     * The duration the file's own header gives, which a bad encoder or an edit can leave wrong:
+     * {@link dev.javax.sonaudio.format.AudioUtils#measureDuration} measures the audio itself.
+     *
+     * @return how long the file's header says its audio plays
+     */
     public Duration duration() {
         return duration;
     }
 
+    /**
+     * Looks up a known tag.
+     *
+     * @param tag the tag to look up
+     * @return its values in the order they were read, or none
+     */
     public Set<TagValue> findValues(final Tag tag) {
         return definedTags.getOrDefault(tag, Set.of());
     }
 
+    /**
+     * Lists the tags that aren't {@link Tag}s, by the names the file gives them, lowercase.
+     *
+     * @return each unknown tag with its values
+     */
     public Stream<TagSet> unknownTags() {
         return unknownTags.entrySet().stream().map(entry -> new TagSet(entry.getKey(), entry.getValue()));
     }

@@ -1,12 +1,12 @@
 plugins {
     id("java-library")
     id("signing")
-    id("com.vanniktech.maven.publish").version("0.36.0")
-    id("com.diffplug.spotless").version("8.10.4")
+    id("com.vanniktech.maven.publish").version("0.37.0")
+    id("com.diffplug.spotless").version("8.11.0")
 }
 
 group = "dev.javax"
-version = "0.1.0-SNAPSHOT"
+version = "0.1.0-RC"
 
 repositories {
     mavenCentral()
@@ -19,31 +19,33 @@ java {
 }
 
 dependencies {
-    api("dev.javax:bitstream:0.2.0-RC")
+    implementation("dev.javax:bitstream:0.2.0-RC")
 
-    compileOnly("org.projectlombok:lombok:1.18.46")
-    annotationProcessor("org.projectlombok:lombok:1.18.46")
-    testCompileOnly("org.projectlombok:lombok:1.18.46")
-    testAnnotationProcessor("org.projectlombok:lombok:1.18.46")
+    compileOnly("org.projectlombok:lombok:1.18.48")
+    annotationProcessor("org.projectlombok:lombok:1.18.48")
+    testCompileOnly("org.projectlombok:lombok:1.18.48")
+    testAnnotationProcessor("org.projectlombok:lombok:1.18.48")
 
-    testImplementation(platform("org.junit:junit-bom:5.10.0"))
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.assertj:assertj-core:3.27.7")
     testImplementation("org.apache.commons:commons-compress:1.28.0")
-    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.0")
+    testImplementation("com.tngtech.archunit:archunit-junit5:1.5.1")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 // Warnings fail the build. Sonaudio serializes nothing, so classes need no serialVersionUID.
 tasks.withType<JavaCompile>().configureEach {
-    options.compilerArgs.addAll(listOf("-Xlint:all,-processing,-serial", "-Werror"))
+    // A module compiles with its sources on the source path, so an incremental build reads the files it doesn't
+    // recompile from there, without annotation processing: they need no class files, which they already have.
+    options.compilerArgs.addAll(listOf("-Xlint:all,-processing,-serial", "-Werror", "-implicit:none"))
 }
 
 // Formats the Java sources: `spotlessApply` rewrites them, and `check` (so `build`) fails on any it would change.
 spotless {
     java {
-        palantirJavaFormat("2.102.0")
+        palantirJavaFormat("2.103.0")
     }
 }
 
@@ -85,5 +87,13 @@ mavenPublishing {
             connection.set("scm:git:git://github.com/JonathanVusich/sonaudio.git")
             developerConnection.set("scm:git:ssh://git@github.com/JonathanVusich/sonaudio.git")
         }
+    }
+}
+
+// A broken doc comment fails the build. Comments may give only a @return, so missing descriptions aren't checked.
+tasks.javadoc {
+    (options as StandardJavadocDocletOptions).apply {
+        addBooleanOption("Xdoclint:all,-missing", true)
+        addBooleanOption("Xwerror", true)
     }
 }

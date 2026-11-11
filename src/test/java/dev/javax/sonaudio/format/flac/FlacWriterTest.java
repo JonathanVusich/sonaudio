@@ -11,6 +11,9 @@ import dev.javax.sonaudio.metadata.Tag;
 import dev.javax.sonaudio.metadata.TagValue;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
@@ -38,6 +41,19 @@ class FlacWriterTest {
         }
         assertThat(parsed.unknownTags())
                 .containsExactlyInAnyOrderElementsOf(metadata.unknownTags().toList());
+    }
+
+    // The Vorbis comment's vendor string follows its length, as 32 bits little-endian.
+    @Test
+    void namesSonaudioAsTheVendor() throws IOException {
+        final var vendor = "sonaudio".getBytes(StandardCharsets.UTF_8);
+        final var lengthThenVendor = ByteBuffer.allocate(Integer.BYTES + vendor.length)
+                .order(ByteOrder.LITTLE_ENDIAN)
+                .putInt(vendor.length)
+                .put(vendor)
+                .array();
+
+        assertThat(writeFlac(new RawMetadata(Duration.ofSeconds(1)))).containsSequence(lengthThenVendor);
     }
 
     @Test

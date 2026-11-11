@@ -4,7 +4,7 @@ package dev.javax.sonaudio.fingerprint;
  * The fast Fourier transform of real frames of one size, a power of two: an iterative radix-2 transform in doubles. It
  * reuses its working arrays from frame to frame, so one transform isn't safe to share between threads.
  */
-public final class Fft {
+final class Fft {
 
     private final int size;
     private final int[] bitReversed;

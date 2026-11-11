@@ -1,7 +1,7 @@
 package dev.javax.sonaudio.format.flac;
 
 /**
- * What a Vorbis comment field holds: one of Sona's tags, or a tag Sona keeps under its own name.
+ * What a Vorbis comment field holds: one of sonaudio's tags, or a tag sonaudio keeps under its own name.
  */
 sealed interface FieldTag permits FieldTag.Known, FieldTag.Unknown {
 

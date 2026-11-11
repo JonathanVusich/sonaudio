@@ -7,7 +7,7 @@ import java.util.stream.Stream;
 import lombok.experimental.UtilityClass;
 
 @UtilityClass
-public final class FlacUtils {
+final class FlacUtils {
 
     /**
      * @return one Vorbis comment field per value, under the field name in upper case

@@ -1,4 +1,4 @@
-package dev.javax.sonaudio.format;
+package dev.javax.sonaudio.format.flac;
 
 import dev.javax.bitstream.ByteSource;
 import java.io.EOFException;
@@ -12,7 +12,7 @@ import java.util.zip.Checksum;
  * checksums cover exactly the bytes read. It buffers the input stream itself, as the bit stream takes a byte or two at
  * a time, and a {@code BufferedInputStream}'s checks and locking on each of those reads cost more than decoding them.
  */
-public final class ChecksummedByteSource implements ByteSource {
+final class ChecksummedByteSource implements ByteSource {
 
     private final InputStream inputStream;
     private final Checksum[] checksums;
@@ -23,7 +23,7 @@ public final class ChecksummedByteSource implements ByteSource {
     /**
      * @param checksums updated with every byte read, which the caller resets and reads as it needs
      */
-    public ChecksummedByteSource(final InputStream inputStream, final Checksum... checksums) {
+    ChecksummedByteSource(final InputStream inputStream, final Checksum... checksums) {
         this.inputStream = inputStream;
         this.checksums = checksums;
     }

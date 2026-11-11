@@ -1,7 +1,16 @@
 package dev.javax.sonaudio.format.flac;
 
-// The "last metadata block" flag. Declared in bit order: each constant's ordinal is its bit.
+// Declared in bit order: each constant's ordinal is its bit.
+/**
+ * A metadata block header's "last metadata block" flag.
+ */
 public enum BlockPosition {
+    /**
+     * Another metadata block follows.
+     */
     NOT_LAST,
+    /**
+     * The audio follows.
+     */
     LAST,
 }

@@ -7,6 +7,9 @@ import dev.javax.sonaudio.metadata.RawMetadata;
  */
 public interface ParsedAudio {
 
+    /**
+     * @return the file's tags, and the duration its header gives
+     */
     RawMetadata metadata();
 
     /**

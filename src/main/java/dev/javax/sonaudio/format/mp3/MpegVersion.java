@@ -4,7 +4,7 @@ package dev.javax.sonaudio.format.mp3;
  * The MPEG audio versions an MP3's frames may be in: MPEG-1 (ISO/IEC 11172-3), MPEG-2's lower sample rates (ISO/IEC
  * 13818-3), and the unofficial MPEG-2.5's lower ones still.
  */
-public enum MpegVersion {
+enum MpegVersion {
     MPEG_1(new int[] {44100, 48000, 32000}, Bitrates.MPEG_1),
     MPEG_2(new int[] {22050, 24000, 16000}, Bitrates.LSF),
     MPEG_2_5(new int[] {11025, 12000, 8000}, Bitrates.LSF);

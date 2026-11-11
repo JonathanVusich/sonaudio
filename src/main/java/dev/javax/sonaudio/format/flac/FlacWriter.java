@@ -16,6 +16,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
+/**
+ * Writes a FLAC stream's metadata: its {@code fLaC} marker, a STREAMINFO block of the duration, as a 16-bit stereo
+ * stream at 44.1 kHz with no checksum, and a VORBIS_COMMENT block of the tags.
+ */
 public final class FlacWriter implements Writer {
 
     private static final int STREAM_INFO_SIZE = 34;
@@ -29,11 +33,16 @@ public final class FlacWriter implements Writer {
     private static final int PICTURE_FIELDS_SIZE = 8 * 4;
     private static final int MD5_SIZE = 16;
 
-    private static final String VENDOR = "Sona";
+    private static final String VENDOR = "sonaudio";
     private static final int DEFAULT_BLOCK_SIZE = 4096;
     private static final int DEFAULT_SAMPLE_RATE = 44_100;
     private static final int DEFAULT_CHANNELS = 2;
     private static final int DEFAULT_BITS_PER_SAMPLE = 16;
+
+    /**
+     * Makes a writer, which keeps no state between files, so one can write every FLAC file, from any thread.
+     */
+    public FlacWriter() {}
 
     @Override
     public Format format() {

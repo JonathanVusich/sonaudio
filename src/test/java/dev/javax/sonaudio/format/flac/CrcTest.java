@@ -1,4 +1,4 @@
-package dev.javax.sonaudio.format;
+package dev.javax.sonaudio.format.flac;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

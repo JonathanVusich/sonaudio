@@ -6,7 +6,7 @@ import static dev.javax.sonaudio.fingerprint.FilterUtils.contrast;
  * How a {@link Classifier}'s filter splits its rectangle of an {@link IntegralImage} into two parts to compare: rows
  * run forward in time, and bands up through the notes of the octave.
  */
-public enum FilterShape {
+enum FilterShape {
     /** The whole rectangle, against nothing. */
     WHOLE,
     /** Its upper half of bands against its lower half. */

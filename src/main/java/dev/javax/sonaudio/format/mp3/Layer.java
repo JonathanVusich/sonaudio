@@ -4,7 +4,7 @@ package dev.javax.sonaudio.format.mp3;
  * The MPEG audio layers a frame may be coded in (ISO/IEC 11172-3 section 2.4.2.3). Each codes 32 subbands: Layers I
  * and II code their samples directly, and Layer III codes each subband's frequency lines.
  */
-public enum Layer {
+enum Layer {
     I,
     II,
     III;

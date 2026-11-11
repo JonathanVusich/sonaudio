@@ -7,7 +7,7 @@ import java.util.Map;
  * @param streamInfo the STREAMINFO block, which every FLAC file starts with
  * @param metadataBlocks every metadata block, STREAMINFO's included, by type
  */
-public record FlacMetadata(StreamInfo streamInfo, Map<BlockType, List<Block>> metadataBlocks) {
+record FlacMetadata(StreamInfo streamInfo, Map<BlockType, List<Block>> metadataBlocks) {
 
     public List<VorbisComment> vorbisComments() {
         final var blocks = metadataBlocks.getOrDefault(BlockType.VORBIS_COMMENT, List.of());

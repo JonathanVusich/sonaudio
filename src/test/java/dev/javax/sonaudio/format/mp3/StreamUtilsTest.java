@@ -1,4 +1,4 @@
-package dev.javax.sonaudio.format;
+package dev.javax.sonaudio.format.mp3;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

@@ -100,6 +100,9 @@ public final class Mp3Decoder implements FloatPcmAudio {
         this.leadingSamples = streamInfo.leadingSamples();
     }
 
+    /**
+     * @return what the parser found of the stream before its audio
+     */
     public Mp3StreamInfo streamInfo() {
         return streamInfo;
     }

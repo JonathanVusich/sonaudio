@@ -44,6 +44,11 @@ public final class FloatPcmFrame implements PcmFrame {
         return samples[0].length;
     }
 
+    /**
+     * @param channel the channel, from 0
+     * @param index the sample's index in the frame, from 0
+     * @return the sample, where full scale is 1.0, unrounded and unclipped
+     */
     public float channelSample(final int channel, final int index) {
         return samples[channel][index];
     }

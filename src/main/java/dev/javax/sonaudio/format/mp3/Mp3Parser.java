@@ -36,7 +36,7 @@ import java.util.zip.ZipException;
  * Reads an MP3 straight from the file's stream through bit streams: its ID3v2 tag at its start, in version 2.3 or 2.4
  * (id3.org's ID3v2.3.0 and ID3v2.4.0 structure documents), the ID3v1 tag that may end it, and its length from its first
  * frame. Every field of the ID3v2 tag is whole bytes, so the bit stream holds no bits between fields, and the tag's
- * regions skip what Sona doesn't read.
+ * regions skip what sonaudio doesn't read.
  */
 public final class Mp3Parser implements Parser {
 
@@ -77,6 +77,11 @@ public final class Mp3Parser implements Parser {
 
     private final Id3v1Reader id3v1Reader = new Id3v1Reader();
     private final VbrHeaderReader vbrHeaderReader = new VbrHeaderReader();
+
+    /**
+     * Makes a parser, which keeps no state between files, so one can parse every MP3, from any thread.
+     */
+    public Mp3Parser() {}
 
     @Override
     public Format format() {
@@ -204,7 +209,7 @@ public final class Mp3Parser implements Parser {
      * Finds where the decoder starts, as FFmpeg's MP3 demuxer does, and works out how long the stream is from its VBR
      * header, or by counting its frames when it has none. A Layer III frame right at the start of the audio may hold a
      * VBR header, and is skipped when it does. Then any bytes before the first frame that's followed by another of its
-     * stream are skipped, if the frame is in the first 64 KiB. FFmpeg can't decode free format, which Sona can when the
+     * stream are skipped, if the frame is in the first 64 KiB. FFmpeg can't decode free format, which sonaudio can when the
      * audio starts with a free-format Layer III frame.
      *
      * @param audioStart where the audio starts: the end of the ID3v2 tag, or 0 when the file has none
@@ -582,7 +587,8 @@ public final class Mp3Parser implements Parser {
         return readFrames(version, tagFlags, body);
     }
 
-    // Keeps the frames Sona reads, and skips the rest, as the spec lets a reader skip frames it doesn't know. Padding,
+    // Keeps the frames sonaudio reads, and skips the rest, as the spec lets a reader skip frames it doesn't know.
+    // Padding,
     // which must be all NULs, may follow the last frame, and no frame ID starts with a NUL.
     private List<Id3Frame> readFrames(final Id3Version version, final int tagFlags, final Id3Region body)
             throws IOException, InvalidFormatException {

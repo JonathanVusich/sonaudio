@@ -14,7 +14,8 @@ final class IntensityRatios {
     // MPEG-1's positions run to 6, as 7 marks a band that isn't intensity coded.
     private static final int MPEG_1_POSITIONS = 7;
     // MPEG-2's intensity scale factors take up to 4 bits. ISO/IEC 13818-3 makes the largest a partition's length can
-    // hold mark a band that isn't intensity coded, but FFmpeg applies every one, and Sona decodes as FFmpeg does, as
+    // hold mark a band that isn't intensity coded, but FFmpeg applies every one, and sonaudio decodes as FFmpeg does,
+    // as
     // AcoustID's fpcalc decodes with it.
     private static final int LSF_POSITIONS = 16;
     private static final float[] MPEG_1_LEFT = {

@@ -9,6 +9,7 @@ import java.time.Duration;
  * @param audioStart where the decoder starts: the first frame of audio, after any ID3v2 tag, VBR header frame, and bytes
  *     before the first frame that FFmpeg skips
  * @param audioEnd where the audio ends: the start of the tags after it, or the end of the file
+ * @param sampleRate the first frame's samples per second, per channel
  * @param channelCount the first frame's channels, which a later frame may change
  * @param samplesPerFrame the first frame's samples per channel
  * @param frameCount how many frames of audio the stream has: as its VBR header says, or as the decoder finds them

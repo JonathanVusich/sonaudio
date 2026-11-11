@@ -3,7 +3,7 @@ package dev.javax.sonaudio.format.mp3;
 /**
  * Whether a CRC of the header and side information follows a frame's header, as its protection bit says.
  */
-public enum Protection {
+enum Protection {
     CRC,
     NONE;
 

@@ -1,7 +1,7 @@
 package dev.javax.sonaudio.format.flac;
 
 // https://www.rfc-editor.org/rfc/rfc9639.html#name-picture
-public record Picture(
+record Picture(
         BlockHeader header,
         PictureType pictureType,
         String mediaType,

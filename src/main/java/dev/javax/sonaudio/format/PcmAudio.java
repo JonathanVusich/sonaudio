@@ -7,7 +7,7 @@ import java.io.IOException;
  * Decoded audio, read a frame at a time, all of one kind: {@link IntPcmAudio} gives integers and {@link FloatPcmAudio}
  * floating-point numbers. It reads its stream once, so each frame can only be read once.
  */
-public interface PcmAudio {
+public sealed interface PcmAudio permits IntPcmAudio, FloatPcmAudio {
 
     /**
      * @return samples per second, per channel
@@ -25,4 +25,12 @@ public interface PcmAudio {
      * @throws InvalidFormatException when the audio is corrupt
      */
     boolean hasNextFrame() throws IOException, InvalidFormatException;
+
+    /**
+     * @return the next frame, of the kind this audio gives, which {@link IntPcmAudio} and {@link FloatPcmAudio} name
+     * @throws java.util.NoSuchElementException when there are no more frames
+     * @throws IOException when the stream can't be read, or ends before a frame does
+     * @throws InvalidFormatException when the frame is corrupt
+     */
+    PcmFrame nextFrame() throws IOException, InvalidFormatException;
 }

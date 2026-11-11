@@ -12,7 +12,7 @@ import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
 @Getter
-public enum FlacTag {
+enum FlacTag {
     ARTIST("artist", Tag.TRACK_ARTIST),
     ALBUM_ARTIST("albumartist", Tag.ALBUM_ARTIST),
     TITLE("title", Tag.TRACK_TITLE),

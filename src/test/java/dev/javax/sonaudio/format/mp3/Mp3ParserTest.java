@@ -48,7 +48,7 @@ class Mp3ParserTest {
 
         assertThat(unknownTag(metadata, "musicbrainz_albumid"))
                 .containsExactly(new TagValue.Str("5b59d66b-8902-4350-b2e3-324037ef4cb0"));
-        // Frames that hold none of Sona's tags are kept under their frame IDs.
+        // Frames that hold none of sonaudio's tags are kept under their frame IDs.
         assertThat(unknownTag(metadata, "tsse")).containsExactly(new TagValue.Str("Lavf58.29.100"));
     }
 

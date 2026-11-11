@@ -10,7 +10,7 @@ package dev.javax.sonaudio.format.mp3;
  * @param modeExtension in joint stereo, which stereo coding the frame uses: in Layer III, bit 1 for mid/side and bit 0
  *     for intensity, and in Layers I and II, the subband intensity stereo starts at
  */
-public record FrameHeader(
+record FrameHeader(
         MpegVersion version,
         Layer layer,
         Protection protection,

@@ -3,7 +3,7 @@ package dev.javax.sonaudio.fingerprint;
 /**
  * A frame's power at each frequency an {@link Fft} resolves, from 0 up to half the sample rate.
  */
-public final class PowerSpectrum {
+final class PowerSpectrum {
 
     private final double[] powers;
 
