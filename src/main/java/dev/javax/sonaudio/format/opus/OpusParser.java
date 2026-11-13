@@ -1,5 +1,6 @@
 package dev.javax.sonaudio.format.opus;
 
+import dev.javax.bitstream.BitInputStream;
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.Format;
 import dev.javax.sonaudio.format.Parser;
@@ -13,11 +14,11 @@ import dev.javax.sonaudio.metadata.RawMetadata;
 import dev.javax.sonaudio.metadata.RawMetadataBuilder;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.Channels;
 import java.nio.channels.SeekableByteChannel;
 import java.util.ArrayList;
@@ -37,10 +38,15 @@ import java.util.List;
  * FFmpeg's does.
  *
  * <p>A packet's framing (RFC 6716 section 3) is read here too, for the decoder.
+ *
+ * <p>The page header and OpusHead are read through the bit reader. The pages themselves are read as bytes, as their
+ * CRC covers all of them and a packet may continue across pages, and a packet is a byte array for the range decoder,
+ * which reads raw bits from the end of a frame backwards.
  */
 public final class OpusParser implements Parser {
 
-    private static final int CAPTURE_PATTERN = 0x4F_67_67_53;
+    // "OggS", as the little-endian bit reader reads its four bytes.
+    private static final int CAPTURE_PATTERN = 0x53_67_67_4F;
     private static final byte[] CAPTURE_BYTES = {'O', 'g', 'g', 'S'};
     private static final byte[] HEAD_MAGIC = {'O', 'p', 'u', 's', 'H', 'e', 'a', 'd'};
     private static final byte[] TAGS_MAGIC = {'O', 'p', 'u', 's', 'T', 'a', 'g', 's'};
@@ -57,7 +63,6 @@ public final class OpusParser implements Parser {
     private static final long OGG_CRC_POLYNOMIAL = 0x04C11DB7L;
     private static final int CRC_WIDTH = 32;
     private static final int OPUS_HEAD_SIZE = 19;
-    private static final int MAPPING_TABLE_OFFSET = 21;
     private static final int MAJOR_VERSION_MASK = 0xF0;
     private static final int UNMAPPED_CHANNEL = 255;
     private static final int MAX_VORBIS_ORDER_CHANNELS = 8;
@@ -190,20 +195,21 @@ public final class OpusParser implements Parser {
     }
 
     private PageHeader readPageHeader(final byte[] headerBytes) throws IOException, InvalidFormatException {
-        final var fields = new DataInputStream(new ByteArrayInputStream(headerBytes));
-        if (fields.readInt() != CAPTURE_PATTERN) {
+        final var fields = BitInputStream.wrap(new ByteArrayInputStream(headerBytes), ByteOrder.LITTLE_ENDIAN);
+        if (fields.readBits(Integer.SIZE) != CAPTURE_PATTERN) {
             throw new InvalidFormatException("Not an Ogg page: no OggS capture pattern");
         }
-        final var version = fields.readUnsignedByte();
+        final var version = (int) fields.readBits(Byte.SIZE);
         if (version != 0) {
             throw new InvalidFormatException("Unsupported Ogg version: " + version);
         }
-        final var flags = fields.readUnsignedByte();
-        final var granule = Long.reverseBytes(fields.readLong());
-        final var serial = Integer.reverseBytes(fields.readInt());
-        final var sequence = Integer.reverseBytes(fields.readInt());
-        final var crc = Integer.reverseBytes(fields.readInt()) & 0xFFFF_FFFFL;
-        return new PageHeader(flags, granule, serial, sequence, crc, fields.readUnsignedByte());
+        final var flags = (int) fields.readBits(Byte.SIZE);
+        final var granuleLow = fields.readBits(Integer.SIZE);
+        final var granule = fields.readBits(Integer.SIZE) << Integer.SIZE | granuleLow;
+        final var serial = (int) fields.readBits(Integer.SIZE);
+        final var sequence = (int) fields.readBits(Integer.SIZE);
+        final var crc = fields.readBits(Integer.SIZE);
+        return new PageHeader(flags, granule, serial, sequence, crc, (int) fields.readBits(Byte.SIZE));
     }
 
     private byte[] readExactly(final InputStream input, final int length) throws IOException, InvalidFormatException {
@@ -222,7 +228,9 @@ public final class OpusParser implements Parser {
         return size;
     }
 
-    // The CRC covers the whole page with its own field read as zeros.
+    // The CRC covers the whole page with its own field read as zeros, so the page is read as bytes, whose fields the
+    // bit
+    // reader then parses.
     private void verifyCrc(final byte[] headerBytes, final byte[] lacing, final byte[] body, final long expected)
             throws InvalidFormatException {
         final var crc = new Crc(OGG_CRC_POLYNOMIAL, CRC_WIDTH);
@@ -332,33 +340,36 @@ public final class OpusParser implements Parser {
         if (packet.length < OPUS_HEAD_SIZE) {
             throw new InvalidFormatException("OpusHead is " + packet.length + " bytes, not " + OPUS_HEAD_SIZE);
         }
-        final var fields =
-                new DataInputStream(new ByteArrayInputStream(packet, MAGIC_SIZE, packet.length - MAGIC_SIZE));
-        final var version = fields.readUnsignedByte();
+        final var fields = BitInputStream.wrap(
+                new ByteArrayInputStream(packet, MAGIC_SIZE, packet.length - MAGIC_SIZE), ByteOrder.LITTLE_ENDIAN);
+        final var version = (int) fields.readBits(Byte.SIZE);
         if ((version & MAJOR_VERSION_MASK) != 0) {
             throw new InvalidFormatException("Unsupported OpusHead version: " + version);
         }
-        final var channelCount = fields.readUnsignedByte();
+        final var channelCount = (int) fields.readBits(Byte.SIZE);
         if (channelCount == 0) {
             throw new InvalidFormatException("OpusHead has no channels");
         }
-        final var preSkip = Short.reverseBytes(fields.readShort()) & 0xFFFF;
-        final var inputSampleRate = Integer.reverseBytes(fields.readInt());
-        final var outputGain = Short.reverseBytes(fields.readShort());
-        final var family = fields.readUnsignedByte();
-        return readChannelMapping(
-                packet,
-                new OpusStreamInfo(
-                        version,
-                        channelCount,
-                        preSkip,
-                        inputSampleRate,
-                        outputGain,
-                        mappingFamily(family),
-                        1,
-                        channelCount - 1,
-                        new int[] {0, 1},
-                        0));
+        final var preSkip = (int) fields.readBits(Short.SIZE);
+        final var inputSampleRate = (int) fields.readBits(Integer.SIZE);
+        final var outputGain = (short) fields.readBits(Short.SIZE);
+        final var family = (int) fields.readBits(Byte.SIZE);
+        final var head = new OpusStreamInfo(
+                version,
+                channelCount,
+                preSkip,
+                inputSampleRate,
+                outputGain,
+                mappingFamily(family),
+                1,
+                channelCount - 1,
+                new int[] {0, 1},
+                0);
+        try {
+            return readChannelMapping(fields, head);
+        } catch (final EOFException cutShort) {
+            throw new InvalidFormatException("OpusHead's channel mapping table is cut short!");
+        }
     }
 
     private ChannelMappingFamily mappingFamily(final int family) throws InvalidFormatException {
@@ -372,8 +383,8 @@ public final class OpusParser implements Parser {
     }
 
     // Family 0 has no table in its header, so the info already holds the one it implies.
-    private OpusStreamInfo readChannelMapping(final byte[] packet, final OpusStreamInfo head)
-            throws InvalidFormatException {
+    private OpusStreamInfo readChannelMapping(final BitInputStream fields, final OpusStreamInfo head)
+            throws IOException, InvalidFormatException {
         if (head.mappingFamily() == ChannelMappingFamily.SINGLE_STREAM) {
             if (head.channelCount() > 2) {
                 throw new InvalidFormatException("Channel mapping family 0 is for up to 2 channels");
@@ -381,15 +392,12 @@ public final class OpusParser implements Parser {
             return head;
         }
         final var channelCount = head.channelCount();
-        if (packet.length < MAPPING_TABLE_OFFSET + channelCount) {
-            throw new InvalidFormatException("OpusHead's channel mapping table is cut short!");
-        }
+        final var streams = (int) fields.readBits(Byte.SIZE);
+        final var coupled = (int) fields.readBits(Byte.SIZE);
         final var mapping = new int[channelCount];
         for (var channel = 0; channel < channelCount; channel++) {
-            mapping[channel] = packet[MAPPING_TABLE_OFFSET + channel] & 0xFF;
+            mapping[channel] = (int) fields.readBits(Byte.SIZE);
         }
-        final var streams = packet[OPUS_HEAD_SIZE] & 0xFF;
-        final var coupled = packet[OPUS_HEAD_SIZE + 1] & 0xFF;
         final var info = new OpusStreamInfo(
                 head.version(),
                 channelCount,
@@ -454,6 +462,7 @@ public final class OpusParser implements Parser {
      * @return the part's framing
      * @throws InvalidFormatException when the packet is malformed
      */
+    // The packet is bytes, as the Ogg layer put its fragments together, which the range decoder reads from both ends.
     OpusPacket parsePacket(final byte[] data, final int offset, final int length, final Delimiting delimiting)
             throws InvalidFormatException {
         if (length < 1) {
