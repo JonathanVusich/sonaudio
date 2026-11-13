@@ -5,6 +5,7 @@ import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.Format;
 import dev.javax.sonaudio.format.Parser;
 import dev.javax.sonaudio.internal.BoundedInputStream;
+import dev.javax.sonaudio.internal.PicardNames;
 import dev.javax.sonaudio.metadata.RawMetadata;
 import dev.javax.sonaudio.metadata.RawMetadataBuilder;
 import dev.javax.sonaudio.metadata.Tag;
@@ -21,7 +22,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * Reads the metadata of an MPEG-4 file's ALAC audio, and hands out an {@link AlacDecoder} of its samples. A malformed
@@ -70,21 +70,9 @@ public final class AlacParser implements Parser {
     private static final int HEX = 16;
     private static final String FRAGMENTED = "MPEG-4 file is fragmented, which isn't supported!";
 
-    // Picard's freeform names, and the names it gives the same tags in Vorbis comments, so unknown tags have the same
-    // names whether they were read from an MP4, an MP3 or a FLAC file.
-    private static final Map<String, String> PICARD_FREEFORM = Map.ofEntries(
-            Map.entry("musicbrainz artist id", "musicbrainz_artistid"),
-            Map.entry("musicbrainz album id", "musicbrainz_albumid"),
-            Map.entry("musicbrainz album artist id", "musicbrainz_albumartistid"),
-            Map.entry("musicbrainz release group id", "musicbrainz_releasegroupid"),
-            Map.entry("musicbrainz release track id", "musicbrainz_releasetrackid"),
-            Map.entry("musicbrainz work id", "musicbrainz_workid"),
-            Map.entry("musicbrainz disc id", "musicbrainz_discid"),
-            Map.entry("musicbrainz album type", "releasetype"),
-            Map.entry("musicbrainz album status", "releasestatus"),
-            Map.entry("musicbrainz album release country", "releasecountry"),
-            // Picard keeps the recording's MBID in this atom, and calls it MUSICBRAINZ_TRACKID in FLAC.
-            Map.entry("musicbrainz track id", "musicbrainz_trackid"));
+    // Picard keeps the recording's MBID in this atom, and calls it MUSICBRAINZ_TRACKID in FLAC.
+    private static final String RECORDING_ID_NAME = "MusicBrainz Track Id";
+    private static final String RECORDING_ID_TAG = "musicbrainz_trackid";
 
     /**
      * Makes a parser, which keeps no state between files, so one can parse every ALAC file, from any thread.
@@ -145,9 +133,13 @@ public final class AlacParser implements Parser {
     private List<Gapless> gaplessTags(final List<MetadataItem> items, final int audioIndex) {
         final var tags = new ArrayList<Gapless>();
         for (final var item : items) {
-            if (item instanceof MetadataItem.GaplessTag(final var value, final var trackCount)
-                    && trackCount == audioIndex + 1) {
-                tags.addAll(parseGapless(value));
+            switch (item) {
+                case MetadataItem.GaplessTag(final var value, final var trackCount) -> {
+                    if (trackCount == audioIndex + 1) {
+                        tags.addAll(parseGapless(value));
+                    }
+                }
+                case MetadataItem.Known _, MetadataItem.Unknown _ -> {}
             }
         }
         return tags;
@@ -940,7 +932,7 @@ public final class AlacParser implements Parser {
             if (key.equals(ORIGINAL_YEAR)) {
                 items.add(new MetadataItem.Known(Tag.RELEASE_YEAR, new TagValue.Int(year(text))));
             } else {
-                items.add(new MetadataItem.Unknown(PICARD_FREEFORM.getOrDefault(key, key), text, trackCount));
+                items.add(new MetadataItem.Unknown(tagName(name), text, trackCount));
             }
             // FFmpeg takes the name's case as it is.
             if (name.equals(GAPLESS_NAME)) {
@@ -948,6 +940,13 @@ public final class AlacParser implements Parser {
             }
         }
         return items;
+    }
+
+    private String tagName(final String name) {
+        if (name.equals(RECORDING_ID_NAME)) {
+            return RECORDING_ID_TAG;
+        }
+        return PicardNames.userTextName(name);
     }
 
     // A date starts with the year: yyyy, yyyy-MM-dd and so on.
