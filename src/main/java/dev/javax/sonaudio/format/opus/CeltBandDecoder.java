@@ -2,6 +2,8 @@ package dev.javax.sonaudio.format.opus;
 
 import dev.javax.sonaudio.format.opus.CeltVectorUtils.BlockOrder;
 import java.util.Arrays;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * Decodes the shape of every band of a CELT frame (RFC 6716 section 4.3.4): the normalised coefficients of each
@@ -63,6 +65,11 @@ final class CeltBandDecoder {
     private int foldBin;
     private int foldFirstMask;
     private int foldSecondMask;
+    // What carries from one band of the frame to the next.
+    private CeltStereoMode dualStereo;
+    private int lowbandOffset;
+    private int balance;
+    private FoldUpdate foldUpdate;
 
     /**
      * @param noise the generator that fills bands without pulses, which the frame's anti-collapse uses as well
@@ -106,6 +113,18 @@ final class CeltBandDecoder {
             final CeltAllocation allocation,
             final CeltBitAllocator bits,
             final int[] changes) {
+        beginFrame(decoder, codedFrame, allocation, changes);
+        final var totalBits = (codedFrame.frameBits() << 3) - allocation.anticollapseReserve();
+        for (var band = codedFrame.startBand(); band < codedFrame.endBand(); band++) {
+            decodeNextBand(band, totalBits, allocation, bits);
+        }
+    }
+
+    private void beginFrame(
+            final RangeDecoder decoder,
+            final CeltFrame codedFrame,
+            final CeltAllocation allocation,
+            final int[] changes) {
         rangeDecoder = decoder;
         frame = codedFrame;
         spread = allocation.spread();
@@ -115,36 +134,30 @@ final class CeltBandDecoder {
             Arrays.fill(coefficients[channel], 0, codedFrame.frameSamples(), 0f);
             Arrays.fill(collapseMasks[channel], 0);
         }
-        var dualStereo = allocation.dualStereo();
-        var lowbandOffset = 0;
-        var balance = allocation.remainingBits();
-        var foldUpdate = FoldUpdate.ALLOWED;
-        final var totalBits = (codedFrame.frameBits() << 3) - allocation.anticollapseReserve();
-        for (var band = codedFrame.startBand(); band < codedFrame.endBand(); band++) {
-            final var consumed = decoder.tellFraction();
-            if (band != codedFrame.startBand()) {
-                balance -= consumed;
-            }
-            eighthsLeft = totalBits - consumed - 1;
-            final var bandBits = bandBits(allocation, bits, band, balance);
-            lowbandOffset = nextLowbandOffset(band, lowbandOffset, foldUpdate);
-            copyHybridFold(band);
-            if (dualStereo == CeltStereoMode.DUAL && band == intensityBand) {
-                dualStereo = CeltStereoMode.JOINT;
-                averageFoldedChannels(band);
-            }
-            findFoldSource(band, lowbandOffset);
-            decodeChannels(band, bandBits, dualStereo);
-            balance += bits.pulses(band) + consumed;
-            foldUpdate = FoldUpdate.FROZEN;
-            if (bandBits > frame.bandSize(band) << 3) {
-                foldUpdate = FoldUpdate.ALLOWED;
-            }
-        }
+        dualStereo = allocation.dualStereo();
+        lowbandOffset = 0;
+        balance = allocation.remainingBits();
+        foldUpdate = FoldUpdate.ALLOWED;
     }
 
-    private int bandBits(
-            final CeltAllocation allocation, final CeltBitAllocator bits, final int band, final int balance) {
+    private void decodeNextBand(
+            final int band, final int totalBits, final CeltAllocation allocation, final CeltBitAllocator bits) {
+        final var consumed = rangeDecoder.tellFraction();
+        if (band != frame.startBand()) {
+            balance -= consumed;
+        }
+        eighthsLeft = totalBits - consumed - 1;
+        final var bandBits = bandBits(allocation, bits, band);
+        lowbandOffset = nextLowbandOffset(band);
+        copyHybridFold(band);
+        joinStereoAtIntensityBand(band);
+        findFoldSource(band);
+        decodeChannels(band, bandBits);
+        balance += bits.pulses(band) + consumed;
+        foldUpdate = foldUpdateAfter(band, bandBits);
+    }
+
+    private int bandBits(final CeltAllocation allocation, final CeltBitAllocator bits, final int band) {
         if (band > allocation.codedBands() - 1) {
             return 0;
         }
@@ -154,7 +167,7 @@ final class CeltBandDecoder {
     }
 
     // The band that folding starts from moves up while there is room to fold from below it.
-    private int nextLowbandOffset(final int band, final int lowbandOffset, final FoldUpdate foldUpdate) {
+    private int nextLowbandOffset(final int band) {
         final var start = frame.startBand();
         final var roomBelow = CeltTables.BAND_START[band] - CeltTables.BAND_WIDTH[band] >= CeltTables.BAND_START[start];
         if ((roomBelow || band == start + 1) && (foldUpdate == FoldUpdate.ALLOWED || lowbandOffset == 0)) {
@@ -175,15 +188,30 @@ final class CeltBandDecoder {
         }
     }
 
+    // From the intensity band up, the channels are coded jointly, and what is folded is the average of the two.
+    private void joinStereoAtIntensityBand(final int band) {
+        if (dualStereo == CeltStereoMode.DUAL && band == intensityBand) {
+            dualStereo = CeltStereoMode.JOINT;
+            averageFoldedChannels(band);
+        }
+    }
+
     private void averageFoldedChannels(final int band) {
         for (var index = frame.bandStart(frame.startBand()); index < frame.bandStart(band); index++) {
             folded[0][index] = (folded[0][index] + folded[1][index]) / 2;
         }
     }
 
+    private FoldUpdate foldUpdateAfter(final int band, final int bandBits) {
+        if (bandBits > frame.bandSize(band) << 3) {
+            return FoldUpdate.ALLOWED;
+        }
+        return FoldUpdate.FROZEN;
+    }
+
     // Finds the lower band that a band folds from, and which of the blocks below it have content, so that the band's
     // blocks that have none are not folded as if they had.
-    private void findFoldSource(final int band, final int lowbandOffset) {
+    private void findFoldSource(final int band) {
         fold = Fold.ABSENT;
         final var covers = spread != CeltSpread.AGGRESSIVE || frame.blocks() > 1 || timeFrequencyChanges[band] < 0;
         if (lowbandOffset == 0 || !covers) {
@@ -192,14 +220,26 @@ final class CeltBandDecoder {
         fold = Fold.AVAILABLE;
         final var width = CeltTables.BAND_WIDTH[band];
         foldBin = Math.max(CeltTables.BAND_START[frame.startBand()], CeltTables.BAND_START[lowbandOffset] - width);
+        collectFoldMasks(foldStartBand(), foldEndBand(band, width));
+    }
+
+    private int foldStartBand() {
         var foldStart = lowbandOffset;
         do {
             foldStart--;
         } while (CeltTables.BAND_START[foldStart] > foldBin);
+        return foldStart;
+    }
+
+    private int foldEndBand(final int band, final int width) {
         var foldEnd = lowbandOffset - 1;
         do {
             foldEnd++;
         } while (foldEnd < band && CeltTables.BAND_START[foldEnd] < foldBin + width);
+        return foldEnd;
+    }
+
+    private void collectFoldMasks(final int foldStart, final int foldEnd) {
         foldFirstMask = 0;
         foldSecondMask = 0;
         for (var source = foldStart; source < foldEnd; source++) {
@@ -208,25 +248,35 @@ final class CeltBandDecoder {
         }
     }
 
-    private void decodeChannels(final int band, final int bandBits, final CeltStereoMode dualStereo) {
-        final var allBlocks = (1 << frame.blocks()) - 1;
-        var firstMask = allBlocks;
-        var secondMask = allBlocks;
-        if (fold == Fold.AVAILABLE) {
-            firstMask = foldFirstMask;
-            secondMask = foldSecondMask;
-        }
+    private void decodeChannels(final int band, final int bandBits) {
+        final var firstFill = startingFill(foldFirstMask);
+        final var secondFill = startingFill(foldSecondMask);
         if (dualStereo == CeltStereoMode.DUAL) {
-            firstMask = decodeTopBand(band, 0, null, bandBits >> 1, firstMask);
-            secondMask = decodeTopBand(band, 1, null, bandBits >> 1, secondMask);
-        } else {
-            var second = coefficients[1];
-            if (frame.channels() == 1) {
-                second = null;
-            }
-            firstMask = decodeTopBand(band, 0, second, bandBits, firstMask | secondMask);
-            secondMask = firstMask;
+            final var firstMask = decodeTopBand(band, 0, null, bandBits >> 1, firstFill);
+            final var secondMask = decodeTopBand(band, 1, null, bandBits >> 1, secondFill);
+            storeCollapseMasks(band, firstMask, secondMask);
+            return;
         }
+        final var mask = decodeTopBand(band, 0, secondChannel(), bandBits, firstFill | secondFill);
+        storeCollapseMasks(band, mask, mask);
+    }
+
+    // The blocks to fill from the lower bands: those that have content, or all of them when there is nothing to fold.
+    private int startingFill(final int foldMask) {
+        if (fold == Fold.AVAILABLE) {
+            return foldMask;
+        }
+        return (1 << frame.blocks()) - 1;
+    }
+
+    private float[] secondChannel() {
+        if (frame.channels() == 1) {
+            return null;
+        }
+        return coefficients[1];
+    }
+
+    private void storeCollapseMasks(final int band, final int firstMask, final int secondMask) {
         collapseMasks[0][band] = firstMask & 0xFF;
         collapseMasks[frame.channels() - 1][band] = secondMask & 0xFF;
     }
@@ -248,16 +298,16 @@ final class CeltBandDecoder {
 
     private int decodeBand(final int depth) {
         final var state = states[depth];
-        if (state.size == 1) {
+        if (state.getSize() == 1) {
             return decodeSingleCoefficient(state);
         }
         state.begin();
-        if (state.coding == Coding.MONO && state.level == 0) {
+        if (state.getCoding() == Coding.MONO && state.getLevel() == 0) {
             prepareTimeFrequency(state);
         }
         splitWideBand(state);
         var mask = 0;
-        if (state.y != null) {
+        if (state.getY() != null) {
             mask = decodeSplitBand(depth, state);
         } else {
             mask = decodeWholeBand(state);
@@ -267,77 +317,79 @@ final class CeltBandDecoder {
 
     // A band of one coefficient has only a sign, per channel.
     private int decodeSingleCoefficient(final BandState state) {
-        var vector = state.x;
-        var offset = state.xOffset;
-        var count = 1;
-        if (state.y != null) {
-            count = 2;
+        state.getX()[state.getXOffset()] = readSign();
+        if (state.getY() != null) {
+            state.getY()[state.getYOffset()] = readSign();
         }
-        for (var channel = 0; channel < count; channel++) {
-            var sign = 0;
-            if (eighthsLeft >= SIGN_EIGHTHS) {
-                sign = rangeDecoder.decodeRawBits(1);
-                eighthsLeft -= SIGN_EIGHTHS;
-            }
-            vector[offset] = 1.0f - 2.0f * sign;
-            vector = state.y;
-            offset = state.yOffset;
-        }
-        if (state.lowbandOut != null) {
-            state.lowbandOut[state.lowbandOutOffset] = state.x[state.xOffset];
+        if (state.getLowbandOut() != null) {
+            state.getLowbandOut()[state.getLowbandOutOffset()] = state.getX()[state.getXOffset()];
         }
         return 1;
+    }
+
+    private float readSign() {
+        var sign = 0;
+        if (eighthsLeft >= SIGN_EIGHTHS) {
+            sign = rangeDecoder.decodeRawBits(1);
+            eighthsLeft -= SIGN_EIGHTHS;
+        }
+        return 1.0f - 2.0f * sign;
     }
 
     // Time-frequency changes (RFC 6716 section 4.3.4.5): the folded band is recombined into fewer, longer blocks for
     // more frequency resolution, or split into more, shorter ones for more time resolution, as the band is.
     private void prepareTimeFrequency(final BandState state) {
-        var change = timeFrequencyChanges[state.band];
+        var change = timeFrequencyChanges[state.getBand()];
         if (change > 0) {
-            state.recombine = change;
+            state.setRecombine(change);
         }
-        if (state.lowband != null
-                && (state.recombine != 0 || ((state.blockSize & 1) == 0 && change < 0) || state.blocks > 1)) {
-            System.arraycopy(state.lowband, state.lowbandOffset, foldScratch, 0, state.size);
-            state.lowband = foldScratch;
-            state.lowbandOffset = 0;
-        }
+        copyLowbandToScratch(state, change);
         recombineBlocks(state);
         change = divideBlocks(state, change);
-        state.blocksAfterTf = state.blocks;
-        state.blockSizeAfterTf = state.blockSize;
-        if (state.blocksAfterTf > 1 && state.lowband != null) {
+        state.recordTimeFrequencySizes();
+        deinterleaveLowband(state);
+    }
+
+    private void copyLowbandToScratch(final BandState state, final int change) {
+        final var changed =
+                state.getRecombine() != 0 || ((state.getBlockSize() & 1) == 0 && change < 0) || state.getBlocks() > 1;
+        if (state.getLowband() != null && changed) {
+            System.arraycopy(state.getLowband(), state.getLowbandOffset(), foldScratch, 0, state.getSize());
+            state.useLowband(foldScratch);
+        }
+    }
+
+    private void deinterleaveLowband(final BandState state) {
+        if (state.getBlocksAfterTf() > 1 && state.getLowband() != null) {
             CeltVectorUtils.deinterleaveBlocks(
                     hadamardScratch,
-                    state.lowband,
-                    state.lowbandOffset,
-                    state.blockSize >> state.recombine,
-                    state.blocksAfterTf << state.recombine,
-                    state.blockOrder);
+                    state.getLowband(),
+                    state.getLowbandOffset(),
+                    state.getBlockSize() >> state.getRecombine(),
+                    state.getBlocksAfterTf() << state.getRecombine(),
+                    state.getBlockOrder());
         }
     }
 
     private void recombineBlocks(final BandState state) {
-        for (var step = 0; step < state.recombine; step++) {
-            if (state.lowband != null) {
-                CeltVectorUtils.transformHaar(state.lowband, state.lowbandOffset, state.size >> step, 1 << step);
+        for (var step = 0; step < state.getRecombine(); step++) {
+            if (state.getLowband() != null) {
+                CeltVectorUtils.transformHaar(
+                        state.getLowband(), state.getLowbandOffset(), state.getSize() >> step, 1 << step);
             }
-            state.fill = CeltTables.BIT_INTERLEAVE[state.fill & 0xF] | CeltTables.BIT_INTERLEAVE[state.fill >> 4] << 2;
+            state.interleaveFill();
         }
-        state.blocks >>= state.recombine;
-        state.blockSize <<= state.recombine;
+        state.finishRecombining();
     }
 
     private int divideBlocks(final BandState state, final int firstChange) {
         var change = firstChange;
-        while ((state.blockSize & 1) == 0 && change < 0) {
-            if (state.lowband != null) {
-                CeltVectorUtils.transformHaar(state.lowband, state.lowbandOffset, state.blockSize, state.blocks);
+        while ((state.getBlockSize() & 1) == 0 && change < 0) {
+            if (state.getLowband() != null) {
+                CeltVectorUtils.transformHaar(
+                        state.getLowband(), state.getLowbandOffset(), state.getBlockSize(), state.getBlocks());
             }
-            state.fill |= state.fill << state.blocks;
-            state.blocks <<= 1;
-            state.blockSize >>= 1;
-            state.timeDivide++;
+            state.divideBlocksOnce();
             change++;
         }
         return change;
@@ -345,29 +397,23 @@ final class CeltBandDecoder {
 
     // Splits a mono band in two when its bits could code more pulses than a single vector may have.
     private void splitWideBand(final BandState state) {
-        final var cacheStart = CeltCacheTables.INDEX[(state.duration + 1) * CeltTables.BAND_COUNT + state.band];
-        state.cacheStart = cacheStart;
-        if (state.coding == Coding.STEREO || state.duration < 0 || state.size <= 2) {
+        final var cacheStart =
+                CeltCacheTables.INDEX[(state.getDuration() + 1) * CeltTables.BAND_COUNT + state.getBand()];
+        state.setCacheStart(cacheStart);
+        if (state.getCoding() == Coding.STEREO || state.getDuration() < 0 || state.getSize() <= 2) {
             return;
         }
-        if (state.bits <= CeltCacheTables.BITS[cacheStart + CeltCacheTables.BITS[cacheStart]] + 12) {
+        if (state.getBits() <= CeltCacheTables.BITS[cacheStart + CeltCacheTables.BITS[cacheStart]] + 12) {
             return;
         }
-        state.size >>= 1;
-        state.y = state.x;
-        state.yOffset = state.xOffset + state.size;
-        state.duration--;
-        if (state.blocks == 1) {
-            state.fill = (state.fill & 1) | (state.fill << 1);
-        }
-        state.blocks = (state.blocks + 1) >> 1;
+        state.halve();
     }
 
     private int decodeSplitBand(final int depth, final BandState state) {
         final var qalloc = decodeAngle(state);
-        state.bits -= qalloc;
+        state.spendBits(qalloc);
         final var delta = prepareHalves(state);
-        if (state.size == 2 && state.coding == Coding.STEREO) {
+        if (state.getSize() == 2 && state.getCoding() == Coding.STEREO) {
             return decodeTwoStereoCoefficients(depth, state, qalloc);
         }
         return decodeHalves(depth, state, qalloc, delta);
@@ -376,36 +422,44 @@ final class CeltBandDecoder {
     // Decodes the angle that splits the band's bits between its halves (RFC 6716 section 4.3.4.3), or the
     // inversion flag of a stereo band that has no angle. Returns the eighths of a bit it took.
     private int decodeAngle(final BandState state) {
-        final var stereo = state.coding == Coding.STEREO;
-        final var pulseCap = CeltTables.LOG_BAND_WIDTH[state.band] + state.duration * 8;
-        var offset = (pulseCap >> 1) - 4;
-        if (stereo && state.size == 2) {
-            offset = (pulseCap >> 1) - 16;
-        }
+        final var stereo = state.getCoding() == Coding.STEREO;
+        final var pulseCap = CeltTables.LOG_BAND_WIDTH[state.getBand()] + state.getDuration() * 8;
         var quantizations = 1;
-        if (!stereo || state.band < intensityBand) {
-            quantizations = quantizationCount(state, offset, pulseCap);
+        if (!stereo || state.getBand() < intensityBand) {
+            quantizations = quantizationCount(state, angleOffset(state, pulseCap), pulseCap);
         }
         final var tell = rangeDecoder.tellFraction();
-        state.theta = 0;
-        state.inversion = 0;
+        state.setTheta(0);
+        state.setInversion(0);
         if (quantizations != 1) {
-            state.theta = decodeTheta(state, quantizations) * FULL_ANGLE / quantizations;
+            state.setTheta(decodeTheta(state, quantizations) * FULL_ANGLE / quantizations);
         } else if (stereo) {
-            if (state.bits > 2 << 3 && eighthsLeft > 2 << 3 && rangeDecoder.decodeBit(2)) {
-                state.inversion = 1;
-            }
+            state.setInversion(readInversion(state));
         }
         return rangeDecoder.tellFraction() - tell;
     }
 
+    private int angleOffset(final BandState state, final int pulseCap) {
+        if (state.getCoding() == Coding.STEREO && state.getSize() == 2) {
+            return (pulseCap >> 1) - 16;
+        }
+        return (pulseCap >> 1) - 4;
+    }
+
+    private int readInversion(final BandState state) {
+        if (state.getBits() > 2 << 3 && eighthsLeft > 2 << 3 && rangeDecoder.decodeBit(2)) {
+            return 1;
+        }
+        return 0;
+    }
+
     private int quantizationCount(final BandState state, final int offset, final int pulseCap) {
-        var pairs = 2 * state.size - 1;
-        if (state.coding == Coding.STEREO && state.size == 2) {
+        var pairs = 2 * state.getSize() - 1;
+        if (state.getCoding() == Coding.STEREO && state.getSize() == 2) {
             pairs--;
         }
-        final var quantizationBits =
-                Math.min(Math.min(state.bits - pulseCap - (4 << 3), (state.bits + pairs * offset) / pairs), 8 << 3);
+        final var quantizationBits = Math.min(
+                Math.min(state.getBits() - pulseCap - (4 << 3), (state.getBits() + pairs * offset) / pairs), 8 << 3);
         if (quantizationBits < 1 << 3 >> 1) {
             return 1;
         }
@@ -414,10 +468,10 @@ final class CeltBandDecoder {
     }
 
     private int decodeTheta(final BandState state, final int quantizations) {
-        if (state.coding == Coding.STEREO && state.size > 2) {
+        if (state.getCoding() == Coding.STEREO && state.getSize() > 2) {
             return rangeDecoder.decodeStep(quantizations / 2);
         }
-        if (state.coding == Coding.STEREO || state.blocksAfterTf > 1) {
+        if (state.getCoding() == Coding.STEREO || state.getBlocksAfterTf() > 1) {
             return rangeDecoder.decodeUniform(quantizations + 1);
         }
         return rangeDecoder.decodeTriangular(quantizations);
@@ -426,80 +480,88 @@ final class CeltBandDecoder {
     // Works out the gains of the two halves from the angle, and which blocks of the fill carry to each, and returns
     // the difference in bits that the halves are given.
     private int prepareHalves(final BandState state) {
-        state.halvesFill = state.fill;
-        var delta = 0;
-        var mid = 32767;
-        var side = 0;
-        if (state.theta == 0) {
-            state.fill &= (1 << state.blocks) - 1;
-            delta = -FULL_ANGLE;
-        } else if (state.theta == FULL_ANGLE) {
-            mid = 0;
-            side = 32767;
-            state.fill &= ((1 << state.blocks) - 1) << state.blocks;
-            delta = FULL_ANGLE;
-        } else {
-            mid = CeltPulseUtils.fixedPointCosine(state.theta);
-            side = CeltPulseUtils.fixedPointCosine(FULL_ANGLE - state.theta);
-            delta = ((state.size - 1) << 7) * CeltPulseUtils.logTangent(side, mid) + 16384 >> 15;
+        state.keepFillForHalves();
+        final var theta = state.getTheta();
+        if (theta == 0) {
+            state.maskFill((1 << state.getBlocks()) - 1);
+            state.setGains(32767, 0);
+            return -FULL_ANGLE;
         }
-        state.mid = mid / 32768.0f;
-        state.side = side / 32768.0f;
-        return delta;
+        if (theta == FULL_ANGLE) {
+            state.maskFill(((1 << state.getBlocks()) - 1) << state.getBlocks());
+            state.setGains(0, 32767);
+            return FULL_ANGLE;
+        }
+        final var mid = CeltPulseUtils.fixedPointCosine(theta);
+        final var side = CeltPulseUtils.fixedPointCosine(FULL_ANGLE - theta);
+        state.setGains(mid, side);
+        return ((state.getSize() - 1) << 7) * CeltPulseUtils.logTangent(side, mid) + 16384 >> 15;
     }
 
+    // A stereo band of two coefficients has one coded, and the other is that one turned a quarter turn.
     private int decodeTwoStereoCoefficients(final int depth, final BandState state, final int qalloc) {
         var sideBits = 0;
-        if (state.theta != 0 && state.theta != FULL_ANGLE) {
+        if (state.getTheta() != 0 && state.getTheta() != FULL_ANGLE) {
             sideBits = 1 << 3;
         }
-        final var midBits = state.bits - sideBits;
         eighthsLeft -= qalloc + sideBits;
-        var sign = 0;
-        if (sideBits != 0) {
-            sign = rangeDecoder.decodeRawBits(1);
+        final var sign = 1 - 2 * readSignBit(sideBits);
+        final var midBits = state.getBits() - sideBits;
+        var mask = 0;
+        if (state.getTheta() > HALF_ANGLE) {
+            mask = decodeCarriedPair(depth, state, state.getY(), state.getYOffset(), midBits);
+            turnPair(state.getY(), state.getYOffset(), state.getX(), state.getXOffset(), sign);
+        } else {
+            mask = decodeCarriedPair(depth, state, state.getX(), state.getXOffset(), midBits);
+            turnPair(state.getX(), state.getXOffset(), state.getY(), state.getYOffset(), sign);
         }
-        sign = 1 - 2 * sign;
-        final var swapped = state.theta > HALF_ANGLE;
-        final var child = states[depth + 1];
-        final var firstArray = state.x;
-        final var secondArray = state.y;
-        var carrier = firstArray;
-        var carrierOffset = state.xOffset;
-        var other = secondArray;
-        var otherOffset = state.yOffset;
-        if (swapped) {
-            carrier = secondArray;
-            carrierOffset = state.yOffset;
-            other = firstArray;
-            otherOffset = state.xOffset;
-        }
-        child.set(state.band, carrier, carrierOffset, null, 0, state.size, midBits, state.blocks);
-        child.setLowband(
-                state.lowband,
-                state.lowbandOffset,
-                state.lowbandOut,
-                state.lowbandOutOffset,
-                state.duration,
-                state.level,
-                state.gain,
-                state.halvesFill);
-        final var mask = decodeBand(depth + 1);
-        other[otherOffset] = -sign * carrier[carrierOffset + 1];
-        other[otherOffset + 1] = sign * carrier[carrierOffset];
         rotateStereoPair(state);
         return mask;
     }
 
+    private int readSignBit(final int sideBits) {
+        if (sideBits != 0) {
+            return rangeDecoder.decodeRawBits(1);
+        }
+        return 0;
+    }
+
+    // Decodes the coded coefficients of the pair, which are in the array that the angle makes the carrier.
+    private int decodeCarriedPair(
+            final int depth, final BandState state, final float[] carrier, final int carrierOffset, final int midBits) {
+        final var child = states[depth + 1];
+        child.set(state.getBand(), carrier, carrierOffset, null, 0, state.getSize(), midBits, state.getBlocks());
+        child.setLowband(
+                state.getLowband(),
+                state.getLowbandOffset(),
+                state.getLowbandOut(),
+                state.getLowbandOutOffset(),
+                state.getDuration(),
+                state.getLevel(),
+                state.getGain(),
+                state.getHalvesFill());
+        return decodeBand(depth + 1);
+    }
+
+    private void turnPair(
+            final float[] carrier,
+            final int carrierOffset,
+            final float[] other,
+            final int otherOffset,
+            final int sign) {
+        other[otherOffset] = -sign * carrier[carrierOffset + 1];
+        other[otherOffset + 1] = sign * carrier[carrierOffset];
+    }
+
     private void rotateStereoPair(final BandState state) {
-        final var x = state.x;
-        final var y = state.y;
-        final var xo = state.xOffset;
-        final var yo = state.yOffset;
-        x[xo] *= state.mid;
-        x[xo + 1] *= state.mid;
-        y[yo] *= state.side;
-        y[yo + 1] *= state.side;
+        final var x = state.getX();
+        final var y = state.getY();
+        final var xo = state.getXOffset();
+        final var yo = state.getYOffset();
+        x[xo] *= state.getMid();
+        x[xo + 1] *= state.getMid();
+        y[yo] *= state.getSide();
+        y[yo + 1] *= state.getSide();
         var held = x[xo];
         x[xo] = held - y[yo];
         y[yo] = held + y[yo];
@@ -509,43 +571,59 @@ final class CeltBandDecoder {
     }
 
     private int decodeHalves(final int depth, final BandState state, final int qalloc, final int theDelta) {
-        var delta = theDelta;
-        final var stereo = state.coding == Coding.STEREO;
-        if (state.blocksAfterTf > 1 && !stereo && (state.theta & 0x3fff) != 0) {
-            if (state.theta > HALF_ANGLE) {
-                delta -= delta >> (4 - state.duration);
-            } else {
-                delta = Math.min(0, delta + (state.size << 3 >> (5 - state.duration)));
-            }
-        }
-        var midBits = CeltMathUtils.clip((state.bits - delta) / 2, 0, state.bits);
-        var sideBits = state.bits - midBits;
+        final var delta = adjustedDelta(state, theDelta);
+        final var midBits = CeltMathUtils.clip((state.getBits() - delta) / 2, 0, state.getBits());
+        final var sideBits = state.getBits() - midBits;
         eighthsLeft -= qalloc;
-        final var before = eighthsLeft;
         if (midBits >= sideBits) {
-            final var midMask = decodeHalf(depth, state, HalfKind.MID, midBits);
-            var rebalance = midBits - (before - eighthsLeft);
-            if (rebalance > 3 << 3 && state.theta != 0) {
-                sideBits += rebalance - (3 << 3);
-            }
-            final var sideMask = decodeHalf(depth, state, HalfKind.SIDE, sideBits);
-            return midMask | sideMask << shiftOfSide(state);
+            return decodeMidFirst(depth, state, midBits, sideBits);
         }
+        return decodeSideFirst(depth, state, midBits, sideBits);
+    }
+
+    // A band split in time gives its halves bits by how much of the angle each has.
+    private int adjustedDelta(final BandState state, final int delta) {
+        final var stereo = state.getCoding() == Coding.STEREO;
+        if (state.getBlocksAfterTf() <= 1 || stereo || (state.getTheta() & 0x3fff) == 0) {
+            return delta;
+        }
+        if (state.getTheta() > HALF_ANGLE) {
+            return delta - (delta >> (4 - state.getDuration()));
+        }
+        return Math.min(0, delta + (state.getSize() << 3 >> (5 - state.getDuration())));
+    }
+
+    // The half that is decoded second is given the bits that the first left over, beyond a few.
+    private int decodeMidFirst(final int depth, final BandState state, final int midBits, final int sideBits) {
+        final var before = eighthsLeft;
+        final var midMask = decodeHalf(depth, state, HalfKind.MID, midBits);
+        final var rebalance = midBits - (before - eighthsLeft);
+        var sideShare = sideBits;
+        if (rebalance > 3 << 3 && state.getTheta() != 0) {
+            sideShare += rebalance - (3 << 3);
+        }
+        final var sideMask = decodeHalf(depth, state, HalfKind.SIDE, sideShare);
+        return midMask | sideMask << shiftOfSide(state);
+    }
+
+    private int decodeSideFirst(final int depth, final BandState state, final int midBits, final int sideBits) {
+        final var before = eighthsLeft;
         final var sideMask = decodeHalf(depth, state, HalfKind.SIDE, sideBits);
         final var rebalance = sideBits - (before - eighthsLeft);
-        if (rebalance > 3 << 3 && state.theta != FULL_ANGLE) {
-            midBits += rebalance - (3 << 3);
+        var midShare = midBits;
+        if (rebalance > 3 << 3 && state.getTheta() != FULL_ANGLE) {
+            midShare += rebalance - (3 << 3);
         }
-        final var midMask = decodeHalf(depth, state, HalfKind.MID, midBits);
+        final var midMask = decodeHalf(depth, state, HalfKind.MID, midShare);
         return midMask | sideMask << shiftOfSide(state);
     }
 
     // The collapse mask of the second half goes above the first's blocks, for a mono band split in time.
     private int shiftOfSide(final BandState state) {
-        if (state.coding == Coding.STEREO) {
+        if (state.getCoding() == Coding.STEREO) {
             return 0;
         }
-        return state.blocksAfterTf >> 1;
+        return state.getBlocksAfterTf() >> 1;
     }
 
     private enum HalfKind {
@@ -554,72 +632,63 @@ final class CeltBandDecoder {
     }
 
     private int decodeHalf(final int depth, final BandState state, final HalfKind kind, final int bits) {
-        final var stereo = state.coding == Coding.STEREO;
         final var child = states[depth + 1];
-        final var nextLevel = state.level + 1;
         switch (kind) {
-            case MID -> {
-                var gain = 1.0f;
-                var level = 0;
-                if (!stereo) {
-                    gain = state.gain * state.mid;
-                    level = nextLevel;
-                }
-                child.set(state.band, state.x, state.xOffset, null, 0, state.size, bits, state.blocks);
-                child.setLowband(
-                        state.lowband,
-                        state.lowbandOffset,
-                        midOut(state),
-                        midOutOffset(state),
-                        state.duration,
-                        level,
-                        gain,
-                        state.fill);
-            }
-            case SIDE -> {
-                var level = 0;
-                if (!stereo) {
-                    level = nextLevel;
-                }
-                var sideLowband = state.lowband;
-                if (stereo) {
-                    sideLowband = null;
-                }
-                child.set(state.band, state.y, state.yOffset, null, 0, state.size, bits, state.blocks);
-                child.setLowband(
-                        sideLowband,
-                        state.lowbandOffset + state.size,
-                        null,
-                        0,
-                        state.duration,
-                        level,
-                        state.gain * state.side,
-                        state.fill >> state.blocks);
-            }
+            case MID -> setUpMidHalf(child, state, bits);
+            case SIDE -> setUpSideHalf(child, state, bits);
         }
         return decodeBand(depth + 1);
     }
 
-    private float[] midOut(final BandState state) {
-        if (state.coding == Coding.STEREO) {
-            return state.lowbandOut;
+    private void setUpMidHalf(final BandState child, final BandState state, final int bits) {
+        var gain = 1.0f;
+        var level = 0;
+        var lowbandOut = state.getLowbandOut();
+        if (state.getCoding() != Coding.STEREO) {
+            gain = state.getGain() * state.getMid();
+            level = state.getLevel() + 1;
+            lowbandOut = null;
         }
-        return null;
+        child.set(state.getBand(), state.getX(), state.getXOffset(), null, 0, state.getSize(), bits, state.getBlocks());
+        child.setLowband(
+                state.getLowband(),
+                state.getLowbandOffset(),
+                lowbandOut,
+                state.getLowbandOutOffset(),
+                state.getDuration(),
+                level,
+                gain,
+                state.getFill());
     }
 
-    private int midOutOffset(final BandState state) {
-        return state.lowbandOutOffset;
+    private void setUpSideHalf(final BandState child, final BandState state, final int bits) {
+        var level = state.getLevel() + 1;
+        var lowband = state.getLowband();
+        if (state.getCoding() == Coding.STEREO) {
+            level = 0;
+            lowband = null;
+        }
+        child.set(state.getBand(), state.getY(), state.getYOffset(), null, 0, state.getSize(), bits, state.getBlocks());
+        child.setLowband(
+                lowband,
+                state.getLowbandOffset() + state.getSize(),
+                null,
+                0,
+                state.getDuration(),
+                level,
+                state.getGain() * state.getSide(),
+                state.getFill() >> state.getBlocks());
     }
 
     // A band that is not split is a single pulse vector, or noise or a fold of a lower band when it has no pulses.
     private int decodeWholeBand(final BandState state) {
-        var pulses = CeltPulseUtils.pulsesForBits(state.cacheStart, state.bits);
-        var spent = CeltPulseUtils.bitsForPulses(state.cacheStart, pulses);
+        var pulses = CeltPulseUtils.pulsesForBits(state.getCacheStart(), state.getBits());
+        var spent = CeltPulseUtils.bitsForPulses(state.getCacheStart(), pulses);
         eighthsLeft -= spent;
         while (eighthsLeft < 0 && pulses > 0) {
             eighthsLeft += spent;
             pulses--;
-            spent = CeltPulseUtils.bitsForPulses(state.cacheStart, pulses);
+            spent = CeltPulseUtils.bitsForPulses(state.getCacheStart(), pulses);
             eighthsLeft -= spent;
         }
         if (pulses != 0) {
@@ -629,13 +698,15 @@ final class CeltBandDecoder {
     }
 
     private int decodePulses(final BandState state, final int pulseCount) {
-        final var total = CeltPulseUtils.vectorCount(state.size, pulseCount);
+        final var total = CeltPulseUtils.vectorCount(state.getSize(), pulseCount);
         final var index = decodeUniformIndex(total);
-        final var norm = (float) CeltPulseUtils.decodeVector(state.size, pulseCount, index, pulseVector, pulseCursor);
-        final var gain = state.gain / (float) Math.sqrt(norm);
-        CeltVectorUtils.scalePulses(pulseVector, state.x, state.xOffset, state.size, gain);
-        CeltVectorUtils.spreadPulses(state.x, state.xOffset, state.size, state.blocks, pulseCount, spread);
-        return CeltVectorUtils.collapseMask(pulseVector, state.size, state.blocks);
+        final var norm =
+                (float) CeltPulseUtils.decodeVector(state.getSize(), pulseCount, index, pulseVector, pulseCursor);
+        final var gain = state.getGain() / (float) Math.sqrt(norm);
+        CeltVectorUtils.scalePulses(pulseVector, state.getX(), state.getXOffset(), state.getSize(), gain);
+        CeltVectorUtils.spreadPulses(
+                state.getX(), state.getXOffset(), state.getSize(), state.getBlocks(), pulseCount, spread);
+        return CeltVectorUtils.collapseMask(pulseVector, state.getSize(), state.getBlocks());
     }
 
     // A uniform integer below a total that may need all 32 bits: its top bits are range coded, the rest raw.
@@ -655,93 +726,117 @@ final class CeltBandDecoder {
     }
 
     private int fillWithoutPulses(final BandState state) {
-        final var allBlocks = (1 << state.blocks) - 1;
-        state.fill &= allBlocks;
-        if (state.fill == 0) {
-            Arrays.fill(state.x, state.xOffset, state.xOffset + state.size, 0f);
+        final var allBlocks = (1 << state.getBlocks()) - 1;
+        state.maskFill(allBlocks);
+        if (state.getFill() == 0) {
+            Arrays.fill(state.getX(), state.getXOffset(), state.getXOffset() + state.getSize(), 0f);
             return 0;
         }
         var mask = allBlocks;
-        if (state.lowband == null) {
-            for (var index = 0; index < state.size; index++) {
-                state.x[state.xOffset + index] = noise.next() >> 20;
+        if (state.getLowband() == null) {
+            for (var index = 0; index < state.getSize(); index++) {
+                state.getX()[state.getXOffset() + index] = noise.next() >> 20;
             }
         } else {
             foldLowband(state);
-            mask = state.fill;
+            mask = state.getFill();
         }
-        CeltVectorUtils.renormalize(state.x, state.xOffset, state.size, state.gain);
+        CeltVectorUtils.renormalize(state.getX(), state.getXOffset(), state.getSize(), state.getGain());
         return mask;
     }
 
     private void foldLowband(final BandState state) {
-        for (var index = 0; index < state.size; index++) {
+        for (var index = 0; index < state.getSize(); index++) {
             var level = -FOLD_NOISE_LEVEL;
             if ((noise.next() & NOISE_BIT) != 0) {
                 level = FOLD_NOISE_LEVEL;
             }
-            state.x[state.xOffset + index] = state.lowband[state.lowbandOffset + index] + level;
+            state.getX()[state.getXOffset() + index] = state.getLowband()[state.getLowbandOffset() + index] + level;
         }
     }
 
     // What follows the decoding of the halves or the whole of a band: joins stereo halves, and takes a mono band back
     // from the block structure it was decoded in.
     private int finishBand(final BandState state, final int decodedMask) {
-        var mask = decodedMask;
-        if (state.coding == Coding.STEREO) {
-            if (state.size > 2) {
-                CeltVectorUtils.mergeStereo(state.x, state.xOffset, state.y, state.yOffset, state.mid, state.size);
-            }
-            if (state.inversion != 0) {
-                for (var index = 0; index < state.size; index++) {
-                    state.y[state.yOffset + index] *= -1;
-                }
-            }
-            return mask;
+        if (state.getCoding() == Coding.STEREO) {
+            finishStereoBand(state);
+            return decodedMask;
         }
-        if (state.level != 0) {
-            return mask;
+        if (state.getLevel() != 0) {
+            return decodedMask;
         }
-        mask = restoreBlocks(state, mask);
-        return mask;
+        return restoreBlocks(state, decodedMask);
+    }
+
+    private void finishStereoBand(final BandState state) {
+        if (state.getSize() > 2) {
+            CeltVectorUtils.mergeStereo(
+                    state.getX(),
+                    state.getXOffset(),
+                    state.getY(),
+                    state.getYOffset(),
+                    state.getMid(),
+                    state.getSize());
+        }
+        if (state.getInversion() != 0) {
+            for (var index = 0; index < state.getSize(); index++) {
+                state.getY()[state.getYOffset() + index] *= -1;
+            }
+        }
     }
 
     private int restoreBlocks(final BandState state, final int decodedMask) {
-        var mask = decodedMask;
-        if (state.blocksAfterTf > 1) {
+        interleaveBlocksAfterTimeFrequency(state);
+        final var divided = undoTimeDivision(state, decodedMask);
+        final var recombined = undoRecombination(state, divided);
+        scaleForFolding(state);
+        final var blocks = (state.getBlocksAfterTf() >> state.getTimeDivide()) << state.getRecombine();
+        return recombined & ((1 << blocks) - 1);
+    }
+
+    private void interleaveBlocksAfterTimeFrequency(final BandState state) {
+        if (state.getBlocksAfterTf() > 1) {
             CeltVectorUtils.interleaveBlocks(
                     hadamardScratch,
-                    state.x,
-                    state.xOffset,
-                    state.blockSize >> state.recombine,
-                    state.blocksAfterTf << state.recombine,
-                    state.blockOrder);
+                    state.getX(),
+                    state.getXOffset(),
+                    state.getBlockSize() >> state.getRecombine(),
+                    state.getBlocksAfterTf() << state.getRecombine(),
+                    state.getBlockOrder());
         }
-        var blocks = state.blocksAfterTf;
-        var blockSize = state.blockSizeAfterTf;
-        for (var step = 0; step < state.timeDivide; step++) {
+    }
+
+    private int undoTimeDivision(final BandState state, final int decodedMask) {
+        var mask = decodedMask;
+        var blocks = state.getBlocksAfterTf();
+        var blockSize = state.getBlockSizeAfterTf();
+        for (var step = 0; step < state.getTimeDivide(); step++) {
             blocks >>= 1;
             blockSize <<= 1;
             mask |= mask >> blocks;
-            CeltVectorUtils.transformHaar(state.x, state.xOffset, blockSize, blocks);
+            CeltVectorUtils.transformHaar(state.getX(), state.getXOffset(), blockSize, blocks);
         }
-        for (var step = 0; step < state.recombine; step++) {
+        return mask;
+    }
+
+    private int undoRecombination(final BandState state, final int divideMask) {
+        var mask = divideMask;
+        for (var step = 0; step < state.getRecombine(); step++) {
             mask = CeltTables.BIT_DEINTERLEAVE[mask];
-            CeltVectorUtils.transformHaar(state.x, state.xOffset, state.fullSize >> step, 1 << step);
+            CeltVectorUtils.transformHaar(state.getX(), state.getXOffset(), state.getFullSize() >> step, 1 << step);
         }
-        blocks <<= state.recombine;
-        scaleForFolding(state);
-        return mask & ((1 << blocks) - 1);
+        return mask;
     }
 
     // Stores the band for later bands to fold from, scaled so that its energy follows its size.
     private void scaleForFolding(final BandState state) {
-        if (state.lowbandOut == null) {
+        if (state.getLowbandOut() == null) {
             return;
         }
-        final var scale = (float) Math.sqrt(state.fullSize);
-        for (var index = 0; index < state.fullSize; index++) {
-            state.lowbandOut[state.lowbandOutOffset + index] = scale * state.x[state.xOffset + index];
+        final var scale = (float) Math.sqrt(state.getFullSize());
+        for (var index = 0; index < state.getFullSize(); index++) {
+            state.getLowbandOut()[state.getLowbandOutOffset() + index] =
+                    scale * state.getX()[state.getXOffset() + index];
         }
     }
 
@@ -757,38 +852,50 @@ final class CeltBandDecoder {
      * The arguments of one level of a band's decoding, and what that level works out along the way. It is rewritten
      * for each band.
      */
+    @Getter
     private static final class BandState {
-        int band;
-        float[] x;
-        int xOffset;
-        float[] y;
-        int yOffset;
-        int size;
-        int bits;
-        int blocks;
-        float[] lowband;
-        int lowbandOffset;
-        float[] lowbandOut;
-        int lowbandOutOffset;
-        int duration;
-        int level;
-        float gain;
-        int fill;
+        private int band;
+        private float[] x;
+        private int xOffset;
+        private float[] y;
+        private int yOffset;
+        private int size;
+        private int bits;
+        private int blocks;
+        private float[] lowband;
+        private int lowbandOffset;
+        private float[] lowbandOut;
+        private int lowbandOutOffset;
+        private int duration;
+        private int level;
+        private float gain;
+        private int fill;
         // Worked out while decoding.
-        Coding coding;
-        int fullSize;
-        int blocksAfterTf;
-        int blockSize;
-        int blockSizeAfterTf;
-        int recombine;
-        int timeDivide;
-        BlockOrder blockOrder;
-        int cacheStart;
-        int halvesFill;
-        int inversion;
-        float mid;
-        float side;
-        int theta;
+        private Coding coding;
+        private int fullSize;
+        private int blocksAfterTf;
+        private int blockSize;
+        private int blockSizeAfterTf;
+
+        @Setter
+        private int recombine;
+
+        private int timeDivide;
+        private BlockOrder blockOrder;
+
+        @Setter
+        private int cacheStart;
+
+        private int halvesFill;
+
+        @Setter
+        private int inversion;
+
+        private float mid;
+        private float side;
+
+        @Setter
+        private int theta;
 
         void set(
                 final int newBand,
@@ -844,6 +951,65 @@ final class CeltBandDecoder {
             if (blocks == 1) {
                 blockOrder = BlockOrder.HADAMARD;
             }
+        }
+
+        // The lowband is replaced by a copy that the time-frequency changes may rewrite.
+        void useLowband(final float[] copy) {
+            lowband = copy;
+            lowbandOffset = 0;
+        }
+
+        void recordTimeFrequencySizes() {
+            blocksAfterTf = blocks;
+            blockSizeAfterTf = blockSize;
+        }
+
+        // One step of recombining blocks: the fill of each pair of blocks is joined.
+        void interleaveFill() {
+            fill = CeltTables.BIT_INTERLEAVE[fill & 0xF] | CeltTables.BIT_INTERLEAVE[fill >> 4] << 2;
+        }
+
+        void finishRecombining() {
+            blocks >>= recombine;
+            blockSize <<= recombine;
+        }
+
+        // One step of dividing blocks: each block is split in two, with the fill of the first for both.
+        void divideBlocksOnce() {
+            fill |= fill << blocks;
+            blocks <<= 1;
+            blockSize >>= 1;
+            timeDivide++;
+        }
+
+        // The band becomes its first half, with the second as the other channel's array at its offset.
+        void halve() {
+            size >>= 1;
+            y = x;
+            yOffset = xOffset + size;
+            duration--;
+            if (blocks == 1) {
+                fill = (fill & 1) | (fill << 1);
+            }
+            blocks = (blocks + 1) >> 1;
+        }
+
+        void spendBits(final int spent) {
+            bits -= spent;
+        }
+
+        void keepFillForHalves() {
+            halvesFill = fill;
+        }
+
+        void maskFill(final int mask) {
+            fill &= mask;
+        }
+
+        // The gains of the halves, as the fixed-point cosines of the angle give them.
+        void setGains(final int fixedPointMid, final int fixedPointSide) {
+            mid = fixedPointMid / 32768.0f;
+            side = fixedPointSide / 32768.0f;
         }
     }
 }
