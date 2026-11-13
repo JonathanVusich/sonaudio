@@ -49,7 +49,6 @@ public final class AlacDecoder implements IntPcmAudio {
     private static final int MAX_RICE_HISTORY = 0xFFFF;
     private static final int ZERO_RUN_HISTORY = 128;
     private static final int RICE_UPDATE_SHIFT = 9;
-    private static final int MAX_FRAME_BYTES = 0x3FFFFFFF;
 
     // Where each channel of each layout is among the channels FFmpeg outputs, for the channel that each element
     // starts at: 5.1, for one, has its centre channel's element first, but the centre channel is the third output.
@@ -110,24 +109,32 @@ public final class AlacDecoder implements IntPcmAudio {
 
     @Override
     public boolean hasNextFrame() throws IOException, InvalidFormatException {
-        if (pending instanceof PendingFrame.Unread) {
-            pending = findNextFrame();
+        switch (pending) {
+            case PendingFrame.Unread _ -> {
+                pending = findNextFrame();
+                return hasNextFrame();
+            }
+            case PendingFrame.Ready _ -> {
+                return true;
+            }
+            case PendingFrame.Finished _ -> {
+                return false;
+            }
         }
-        return pending instanceof PendingFrame.Ready;
     }
 
     @Override
     public IntPcmFrame nextFrame() throws IOException, InvalidFormatException {
-        if (!hasNextFrame()) {
-            throw new NoSuchElementException("ALAC file has no more frames!");
-        }
         switch (pending) {
+            case PendingFrame.Unread _ -> {
+                pending = findNextFrame();
+                return nextFrame();
+            }
             case PendingFrame.Ready(final var frame) -> {
                 pending = new PendingFrame.Unread();
                 return frame;
             }
-            case PendingFrame.Unread _, PendingFrame.Finished _ ->
-                throw new IllegalStateException("A frame was ready and is not");
+            case PendingFrame.Finished _ -> throw new NoSuchElementException("ALAC file has no more frames!");
         }
     }
 

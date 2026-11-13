@@ -112,6 +112,41 @@ class AlacEditListTest {
         assertThat(audio.streamInfo().sampleCount()).isEqualTo(22050 - 0x100);
     }
 
+    // A tag that has no remainder doesn't set where the audio ends, so the last packet is trimmed to the duration.
+    @Test
+    void trimsToTheTracksDurationWhenTheGaplessTagHasNoRemainder() throws IOException, InvalidFormatException {
+        final var tagged = AlacTestFiles.withFreeformItem(
+                file(), "iTunSMPB", " 00000000 00000000 00000000 0000000000005400 00000000");
+        final var file = AlacTestFiles.withMediaDuration(tagged, 21000);
+
+        final var audio = parser.parse(new SeekableInMemoryByteChannel(file)).audio();
+
+        assertThat(AlacPcm.decodeToBytes(audio)).isEqualTo(samples(0, 21000));
+    }
+
+    // Each tag that fits the track sets the end again, so the last wins.
+    @Test
+    void usesTheLastGaplessTagThatFitsTheTrack() throws IOException, InvalidFormatException {
+        final var first = AlacTestFiles.withFreeformItem(
+                file(), "iTunSMPB", " 00000000 00000000 00000100 0000000000005400 00000000");
+        final var tagged = AlacTestFiles.withFreeformItem(
+                first, "iTunSMPB", " 00000000 00000000 00000200 0000000000005400 00000000");
+
+        final var audio = parser.parse(new SeekableInMemoryByteChannel(tagged)).audio();
+
+        assertThat(AlacPcm.decodeToBytes(audio)).isEqualTo(samples(0, 22050 - 0x200));
+    }
+
+    @Test
+    void readsTheGaplessTagByItsNameInTheCaseItIsWritten() throws IOException, InvalidFormatException {
+        final var file = AlacTestFiles.withFreeformItem(
+                file(), "ITUNSMPB", " 00000000 00000000 00000100 0000000000005400 00000000");
+
+        final var audio = parser.parse(new SeekableInMemoryByteChannel(file)).audio();
+
+        assertThat(AlacPcm.decodeToBytes(audio)).isEqualTo(samples(0, 22050));
+    }
+
     @Test
     void ignoresAGaplessTagThatIsNotMadeOfNumbers() throws IOException, InvalidFormatException {
         final var file = AlacTestFiles.withFreeformItem(file(), "iTunSMPB", " 00000000 zz 00000100 00005400");

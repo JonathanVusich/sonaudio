@@ -62,7 +62,7 @@ public final class AlacParser implements Parser {
     private static final int IMPLICIT_DATA = 0;
     private static final int NUMBER_DATA_SIZE = 6;
     private static final String QUICKTIME_BRAND = "qt  ";
-    private static final String GAPLESS_TAG = "itunsmpb";
+    private static final String GAPLESS_NAME = "iTunSMPB";
     private static final String ORIGINAL_YEAR = "originalyear";
     private static final String DATE_TAG = "date";
     private static final int YEAR_LENGTH = 4;
@@ -104,7 +104,7 @@ public final class AlacParser implements Parser {
         if (!track.edits().isEmpty() && movie.timeScale() <= 0) {
             throw new InvalidFormatException("MPEG-4 file has an edit list but no movie time scale!");
         }
-        final var gapless = gapless(movie.items(), audio.index());
+        final var gapless = gaplessTags(movie.items(), audio.index());
         final var packets = new AlacPacketPlanner(track, movie.timeScale()).plan(gapless);
         final var streamInfo = new AlacStreamInfo(track.cookie(), packets.nominalSampleCount());
         final var metadata = rawMetadata(movie.items(), streamInfo.duration());
@@ -133,38 +133,45 @@ public final class AlacParser implements Parser {
                 case MetadataItem.Known(final var tag, final var value) -> builder.addTag(tag, value);
                 case MetadataItem.Unknown(final var name, final var value, final var trackCount) ->
                     builder.addUnknownTag(name, value);
+                // The gapless tag's text is also an unknown tag, which is what is added.
+                case MetadataItem.GaplessTag _ -> {}
             }
         }
         return builder.build();
     }
 
     // iTunes' tag is "<ignored> <priming> <remainder> <samples> ...", in hexadecimal, and applies to the last track
-    // read when the tag was. FFmpeg reads it from the first of its kind, and ignores one that isn't made of numbers.
-    private Gapless gapless(final List<MetadataItem> items, final int audioIndex) {
+    // read when the tag was. FFmpeg ignores a tag that isn't made of numbers.
+    private List<Gapless> gaplessTags(final List<MetadataItem> items, final int audioIndex) {
+        final var tags = new ArrayList<Gapless>();
         for (final var item : items) {
-            if (item instanceof MetadataItem.Unknown(final var name, final var value, final var trackCount)
-                    && name.equals(GAPLESS_TAG)
+            if (item instanceof MetadataItem.GaplessTag(final var value, final var trackCount)
                     && trackCount == audioIndex + 1) {
-                return parseGapless(value);
+                tags.addAll(parseGapless(value));
             }
         }
-        return new Gapless.Absent();
+        return tags;
     }
 
-    private Gapless parseGapless(final String value) {
+    private List<Gapless> parseGapless(final String value) {
         final var fields = value.trim().split("\\s+");
         if (fields.length < SMPB_FIELDS) {
-            return new Gapless.Absent();
+            return List.of();
         }
         try {
-            Integer.parseUnsignedInt(fields[0], HEX);
-            Integer.parseUnsignedInt(fields[1], HEX);
-            final var remainder = Integer.parseUnsignedInt(fields[2], HEX);
-            final var samples = Integer.parseUnsignedInt(fields[3], HEX);
-            return new Gapless.Smpb(remainder, samples);
+            hexNumber(fields[0]);
+            hexNumber(fields[1]);
+            final var remainder = hexNumber(fields[2]);
+            final var samples = hexNumber(fields[3]);
+            return List.of(new Gapless(remainder, samples));
         } catch (final NumberFormatException ignored) {
-            return new Gapless.Absent();
+            return List.of();
         }
+    }
+
+    // C's scanf stores a hexadecimal number that is too large for 32 bits as all ones.
+    private int hexNumber(final String digits) {
+        return (int) Math.min(Long.parseUnsignedLong(digits, HEX), 0xFFFF_FFFFL);
     }
 
     // The file's boxes, which FFmpeg reads from the first to the end of the file. A moov box may be after the audio.
@@ -934,6 +941,10 @@ public final class AlacParser implements Parser {
                 items.add(new MetadataItem.Known(Tag.RELEASE_YEAR, new TagValue.Int(year(text))));
             } else {
                 items.add(new MetadataItem.Unknown(PICARD_FREEFORM.getOrDefault(key, key), text, trackCount));
+            }
+            // FFmpeg takes the name's case as it is.
+            if (name.equals(GAPLESS_NAME)) {
+                items.add(new MetadataItem.GaplessTag(text, trackCount));
             }
         }
         return items;

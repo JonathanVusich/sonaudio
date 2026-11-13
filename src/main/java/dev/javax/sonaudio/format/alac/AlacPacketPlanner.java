@@ -42,17 +42,17 @@ final class AlacPacketPlanner {
     }
 
     /**
-     * @param gapless what the file's {@code iTunSMPB} tag says
+     * @param gaplessTags what the file's {@code iTunSMPB} tags say, in the order the file has them
      * @return the packets FFmpeg returns, and what it trims of them
      */
-    AlacPackets plan(final Gapless gapless) {
+    AlacPackets plan(final List<Gapless> gaplessTags) {
         final var edits = track.edits();
         final var duration = editedTrack(edits);
         final var sampleRate = track.cookie().sampleRate();
         final var picked = samples.build().toArray();
         final var pickedTimes = timestamps.build().toArray();
         final var entryDurations = entryDurations(pickedTimes, duration);
-        final var window = discardWindow(gapless, pickedTimes, entryDurations, duration);
+        final var window = discardWindow(gaplessTags, pickedTimes, entryDurations, duration);
         final var offsets = new long[picked.length];
         final var sizes = new int[picked.length];
         final var nominal = new long[picked.length];
@@ -116,8 +116,14 @@ final class AlacPacketPlanner {
         final var length = AlacUtils.rescale(edit.duration(), track.timeScale(), movieTimeScale);
         final var counter = editsEnd;
         editsEnd += length;
-        if (nonEmptyEdits == 0 && edit instanceof Edit.Empty) {
-            return;
+        // Empty edits before the first of the track's media only delay it, which FFmpeg's decoded audio doesn't show.
+        switch (edit) {
+            case Edit.Empty _ -> {
+                if (nonEmptyEdits == 0) {
+                    return;
+                }
+            }
+            case Edit.Media _ -> {}
         }
         nonEmptyEdits++;
         final var mediaTime = edit.mediaTime();
@@ -179,22 +185,31 @@ final class AlacPacketPlanner {
         timeCursor++;
     }
 
+    // The last tag that fits the track sets the window as the file is read, and a tag that doesn't leaves it to the
+    // last packet, which sets it as it is returned.
     private DiscardWindow discardWindow(
-            final Gapless gapless, final long[] pickedTimes, final long[] entryDurations, final long duration) {
-        return switch (gapless) {
-            case Gapless.Smpb(final var remainder, final var count) -> smpbWindow(remainder, count, duration);
-            case Gapless.Absent _ -> lastPacketWindow(pickedTimes, entryDurations, duration);
-        };
+            final List<Gapless> gaplessTags,
+            final long[] pickedTimes,
+            final long[] entryDurations,
+            final long duration) {
+        for (final var gapless : gaplessTags.reversed()) {
+            final var window = smpbWindow(gapless, duration);
+            if (window.first() != 0) {
+                return window;
+            }
+        }
+        return lastPacketWindow(pickedTimes, entryDurations, duration);
     }
 
-    // iTunes' tag puts the end of the audio where its remainder starts, when it fits in the track.
-    private DiscardWindow smpbWindow(final int remainder, final int count, final long duration) {
+    // iTunes' tag puts the end of the audio where its remainder starts, when it fits in the track. A window that
+    // starts at 0 is one that the tag didn't set.
+    private DiscardWindow smpbWindow(final Gapless gapless, final long duration) {
         final var sampleRate = track.cookie().sampleRate();
         final var timeScale = track.timeScale();
         final var total = AlacUtils.rescale(duration, sampleRate, timeScale);
-        final var padding = AlacUtils.rescale(remainder, sampleRate, timeScale);
-        final var audio = AlacUtils.rescale(count, sampleRate, timeScale);
-        if (remainder > 0 && total > padding && total > audio) {
+        final var padding = AlacUtils.rescale(gapless.remainder(), sampleRate, timeScale);
+        final var audio = AlacUtils.rescale(gapless.samples(), sampleRate, timeScale);
+        if (gapless.remainder() > 0 && total > padding && total > audio) {
             return new DiscardWindow(sampleRate, timeScale, total - padding, total, DiscardWindow.Scope.EVERY_PACKET);
         }
         return new DiscardWindow(sampleRate, timeScale, 0, 0, DiscardWindow.Scope.EVERY_PACKET);

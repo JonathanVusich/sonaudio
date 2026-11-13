@@ -21,6 +21,7 @@ import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class AlacParserTest {
 
@@ -169,6 +170,42 @@ class AlacParserTest {
         final var audio = parser.parse(new SeekableInMemoryByteChannel(file)).audio();
 
         assertThat(audio.streamInfo().sampleCount()).isEqualTo(6615);
+    }
+
+    // QuickTime's sound description has more fields in versions 1 and 2, which FFmpeg reads when the stsd box's own
+    // version is 0 and the entry's isn't.
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2})
+    void skipsTheFieldsOfAQuickTimeSoundDescription(final int version) throws IOException, InvalidFormatException {
+        final var file =
+                AlacTestFiles.withSoundDescriptionVersion(AlacTestFiles.bytes(AlacSample.STEREO16_LEVEL1), version);
+
+        assertDecodesAsTheOriginal(file);
+    }
+
+    @Test
+    void readsTheCookieInAWaveBoxWithItsFormat() throws IOException, InvalidFormatException {
+        final var file = AlacTestFiles.withWaveAroundCookie(AlacTestFiles.bytes(AlacSample.STEREO16_LEVEL1));
+
+        assertDecodesAsTheOriginal(file);
+    }
+
+    @Test
+    void readsTheCookieInAWaveBoxWithoutBoxes() throws IOException, InvalidFormatException {
+        final var file = AlacTestFiles.withWaveOfRawCookie(AlacTestFiles.bytes(AlacSample.STEREO16_LEVEL1));
+
+        assertDecodesAsTheOriginal(file);
+    }
+
+    private void assertDecodesAsTheOriginal(final byte[] file) throws IOException, InvalidFormatException {
+        final var audio = parser.parse(new SeekableInMemoryByteChannel(file)).audio();
+
+        final var decoded = AlacPcm.decodeToBytes(audio);
+
+        try (final var reference = AlacSample.STEREO16_LEVEL1.referencePcm()) {
+            assertThat(decoded).isEqualTo(reference.readAllBytes());
+        }
+        assertThat(audio.streamInfo().cookie().channelCount()).isEqualTo(2);
     }
 
     @Test

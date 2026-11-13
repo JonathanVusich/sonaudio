@@ -6,6 +6,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import lombok.experimental.UtilityClass;
 
 /**
@@ -178,6 +179,80 @@ final class AlacTestFiles {
         final var start = lastIndexOf(file, type, before) - 4;
         final var buffer = ByteBuffer.wrap(file);
         buffer.putInt(start, buffer.getInt(start) + delta);
+    }
+
+    /**
+     * Gives the sample entry the version QuickTime's sound description has, which comes with 16 more bytes of fields
+     * in version 1 and 36 in version 2, before the entry's boxes.
+     */
+    static byte[] withSoundDescriptionVersion(final byte[] file, final int version) throws IOException {
+        final var cookie = lastIndexOf(file, "alac", file.length);
+        final var entry = lastIndexOf(file, "alac", cookie - 1);
+        final var extra = new byte[versionFieldsSize(version)];
+        final var bytes = inserted(file, cookie - 4, extra);
+        ByteBuffer.wrap(bytes).putShort(entry + 4 + 8, (short) version);
+        growSampleEntry(bytes, entry, extra.length);
+        return bytes;
+    }
+
+    private static int versionFieldsSize(final int version) {
+        return switch (version) {
+            case 1 -> 16;
+            case 2 -> 36;
+            default -> throw new IllegalArgumentException("No fields for version " + version);
+        };
+    }
+
+    /**
+     * Wraps the {@code alac} box in a {@code wave} box, as QuickTime does: an {@code frma} box of the format, the
+     * {@code alac} box and an empty box at the end.
+     */
+    static byte[] withWaveAroundCookie(final byte[] file) throws IOException {
+        final var cookie = lastIndexOf(file, "alac", file.length) - 4;
+        final var cookieBox = Arrays.copyOfRange(file, cookie, cookie + 36);
+        final var content = new ByteArrayOutputStream();
+        content.write(box("frma", "alac".getBytes(StandardCharsets.ISO_8859_1)));
+        content.write(cookieBox);
+        content.write(box("\0\0\0\0", new byte[0]));
+        return replacedCookie(file, box("wave", content.toByteArray()));
+    }
+
+    /**
+     * Replaces the {@code alac} box with a {@code wave} box that holds the cookie's 24 bytes alone.
+     */
+    static byte[] withWaveOfRawCookie(final byte[] file) throws IOException {
+        final var cookie = lastIndexOf(file, "alac", file.length) - 4;
+        // The box's size, type and version come before the 24 bytes of the cookie.
+        final var raw = Arrays.copyOfRange(file, cookie + 12, cookie + 36);
+        return replacedCookie(file, box("wave", raw));
+    }
+
+    private static byte[] replacedCookie(final byte[] file, final byte[] replacement) throws IOException {
+        final var cookieType = lastIndexOf(file, "alac", file.length);
+        final var entry = lastIndexOf(file, "alac", cookieType - 1);
+        final var out = new ByteArrayOutputStream();
+        out.write(file, 0, cookieType - 4);
+        out.write(replacement);
+        out.write(file, cookieType - 4 + 36, file.length - cookieType + 4 - 36);
+        final var bytes = out.toByteArray();
+        growSampleEntry(bytes, entry, replacement.length - 36);
+        return bytes;
+    }
+
+    // Makes the sample entry, which starts at the position of its type, and the boxes that hold it longer.
+    private static void growSampleEntry(final byte[] bytes, final int entryType, final int delta) {
+        grow(bytes, "alac", entryType + 1, delta);
+        for (final var parent : new String[] {"stsd", "stbl", "minf", "mdia", "trak", "moov"}) {
+            grow(bytes, parent, entryType, delta);
+        }
+    }
+
+    private static byte[] inserted(final byte[] file, final int position, final byte[] inserted) {
+        final var result = new byte[file.length + inserted.length];
+        System.arraycopy(file, 0, result, 0, position);
+        System.arraycopy(inserted, 0, result, position, inserted.length);
+        System.arraycopy(file, position, result, position + inserted.length, file.length - position);
+        return result;
     }
 
     /**
