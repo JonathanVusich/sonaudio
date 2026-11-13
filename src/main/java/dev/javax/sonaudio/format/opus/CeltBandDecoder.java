@@ -26,6 +26,15 @@ final class CeltBandDecoder {
     private static final double SQUARE_ROOT_OF_HALF = 0.70710678118654752440;
 
     /**
+     * Whether the band that folding starts from may move up to the band just decoded: it may when that band had more
+     * than a bit for each coefficient.
+     */
+    private enum FoldUpdate {
+        ALLOWED,
+        FROZEN
+    }
+
+    /**
      * Whether a band has a lower band to fold from.
      */
     private enum Fold {
@@ -108,7 +117,7 @@ final class CeltBandDecoder {
         var dualStereo = allocation.dualStereo();
         var lowbandOffset = 0;
         var balance = allocation.remainingBits();
-        var updateLowband = true;
+        var foldUpdate = FoldUpdate.ALLOWED;
         final var totalBits = (codedFrame.frameBits() << 3) - allocation.anticollapseReserve();
         for (var band = codedFrame.startBand(); band < codedFrame.endBand(); band++) {
             final var consumed = decoder.tellFraction();
@@ -117,7 +126,7 @@ final class CeltBandDecoder {
             }
             eighthsLeft = totalBits - consumed - 1;
             final var bandBits = bandBits(allocation, bits, band, balance);
-            lowbandOffset = nextLowbandOffset(band, lowbandOffset, updateLowband);
+            lowbandOffset = nextLowbandOffset(band, lowbandOffset, foldUpdate);
             copyHybridFold(band);
             if (dualStereo == CeltStereoMode.DUAL && band == intensityBand) {
                 dualStereo = CeltStereoMode.JOINT;
@@ -126,7 +135,10 @@ final class CeltBandDecoder {
             findFoldSource(band, lowbandOffset);
             decodeChannels(band, bandBits, dualStereo);
             balance += bits.pulses(band) + consumed;
-            updateLowband = bandBits > frame.bandSize(band) << 3;
+            foldUpdate = FoldUpdate.FROZEN;
+            if (bandBits > frame.bandSize(band) << 3) {
+                foldUpdate = FoldUpdate.ALLOWED;
+            }
         }
     }
 
@@ -141,10 +153,10 @@ final class CeltBandDecoder {
     }
 
     // The band that folding starts from moves up while there is room to fold from below it.
-    private int nextLowbandOffset(final int band, final int lowbandOffset, final boolean updateLowband) {
+    private int nextLowbandOffset(final int band, final int lowbandOffset, final FoldUpdate foldUpdate) {
         final var start = frame.startBand();
         final var roomBelow = CeltTables.BAND_START[band] - CeltTables.BAND_WIDTH[band] >= CeltTables.BAND_START[start];
-        if ((roomBelow || band == start + 1) && (updateLowband || lowbandOffset == 0)) {
+        if ((roomBelow || band == start + 1) && (foldUpdate == FoldUpdate.ALLOWED || lowbandOffset == 0)) {
             return band;
         }
         return lowbandOffset;
@@ -220,8 +232,7 @@ final class CeltBandDecoder {
 
     // Decodes a band of one channel, or of a stereo pair when it is given the second channel's coefficients (null
     // for a single channel), folding from that channel's lower bands.
-    private int decodeTopBand(
-            final int band, final int channel, final float[] second, final int bits, final int fill) {
+    private int decodeTopBand(final int band, final int channel, final float[] second, final int bits, final int fill) {
         final var offset = frame.bandStart(band);
         var lowband = folded[channel];
         if (fold == Fold.ABSENT) {
@@ -230,14 +241,7 @@ final class CeltBandDecoder {
         final var state = states[0];
         state.set(band, coefficients[channel], offset, second, offset, frame.bandSize(band), bits, frame.blocks());
         state.setLowband(
-                lowband,
-                foldBin << frame.sizeShift(),
-                folded[channel],
-                offset,
-                frame.sizeShift(),
-                0,
-                1.0f,
-                fill);
+                lowband, foldBin << frame.sizeShift(), folded[channel], offset, frame.sizeShift(), 0, 1.0f, fill);
         return decodeBand(0);
     }
 
@@ -317,8 +321,7 @@ final class CeltBandDecoder {
             if (state.lowband != null) {
                 CeltVectorUtils.transformHaar(state.lowband, state.lowbandOffset, state.size >> step, 1 << step);
             }
-            state.fill = CeltTables.BIT_INTERLEAVE[state.fill & 0xF]
-                    | CeltTables.BIT_INTERLEAVE[state.fill >> 4] << 2;
+            state.fill = CeltTables.BIT_INTERLEAVE[state.fill & 0xF] | CeltTables.BIT_INTERLEAVE[state.fill >> 4] << 2;
         }
         state.blocks >>= state.recombine;
         state.blockSize <<= state.recombine;
@@ -471,8 +474,15 @@ final class CeltBandDecoder {
             otherOffset = state.xOffset;
         }
         child.set(state.band, carrier, carrierOffset, null, 0, state.size, midBits, state.blocks);
-        child.setLowband(state.lowband, state.lowbandOffset, state.lowbandOut, state.lowbandOutOffset,
-                state.duration, state.level, state.gain, state.halvesFill);
+        child.setLowband(
+                state.lowband,
+                state.lowbandOffset,
+                state.lowbandOut,
+                state.lowbandOutOffset,
+                state.duration,
+                state.level,
+                state.gain,
+                state.halvesFill);
         final var mask = decodeBand(depth + 1);
         other[otherOffset] = -sign * carrier[carrierOffset + 1];
         other[otherOffset + 1] = sign * carrier[carrierOffset];
@@ -507,7 +517,7 @@ final class CeltBandDecoder {
                 delta = Math.min(0, delta + (state.size << 3 >> (5 - state.duration)));
             }
         }
-        var midBits = clip((state.bits - delta) / 2, 0, state.bits);
+        var midBits = CeltMathUtils.clip((state.bits - delta) / 2, 0, state.bits);
         var sideBits = state.bits - midBits;
         eighthsLeft -= qalloc;
         final var before = eighthsLeft;
@@ -555,8 +565,15 @@ final class CeltBandDecoder {
                     level = nextLevel;
                 }
                 child.set(state.band, state.x, state.xOffset, null, 0, state.size, bits, state.blocks);
-                child.setLowband(state.lowband, state.lowbandOffset, midOut(state), midOutOffset(state),
-                        state.duration, level, gain, state.fill);
+                child.setLowband(
+                        state.lowband,
+                        state.lowbandOffset,
+                        midOut(state),
+                        midOutOffset(state),
+                        state.duration,
+                        level,
+                        gain,
+                        state.fill);
             }
             case SIDE -> {
                 var level = 0;
@@ -568,21 +585,18 @@ final class CeltBandDecoder {
                     sideLowband = null;
                 }
                 child.set(state.band, state.y, state.yOffset, null, 0, state.size, bits, state.blocks);
-                child.setLowband(sideLowband, state.lowbandOffset + state.size, null, 0, state.duration, level,
-                        state.gain * state.side, state.fill >> state.blocks);
+                child.setLowband(
+                        sideLowband,
+                        state.lowbandOffset + state.size,
+                        null,
+                        0,
+                        state.duration,
+                        level,
+                        state.gain * state.side,
+                        state.fill >> state.blocks);
             }
         }
         return decodeBand(depth + 1);
-    }
-
-    private static int clip(final int value, final int low, final int high) {
-        if (value < low) {
-            return low;
-        }
-        if (value > high) {
-            return high;
-        }
-        return value;
     }
 
     private float[] midOut(final BandState state) {
@@ -675,8 +689,7 @@ final class CeltBandDecoder {
         var mask = decodedMask;
         if (state.coding == Coding.STEREO) {
             if (state.size > 2) {
-                CeltVectorUtils.mergeStereo(
-                        state.x, state.xOffset, state.y, state.yOffset, state.mid, state.size);
+                CeltVectorUtils.mergeStereo(state.x, state.xOffset, state.y, state.yOffset, state.mid, state.size);
             }
             if (state.inversion != 0) {
                 for (var index = 0; index < state.size; index++) {

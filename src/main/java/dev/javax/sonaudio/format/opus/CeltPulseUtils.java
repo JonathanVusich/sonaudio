@@ -89,9 +89,9 @@ class CeltPulseUtils {
     private static PulseEntry decodeEntryWithManyPulses(final int left, final int pulses, final long index) {
         var remaining = index;
         final var negativeStart = pulseCount(left, pulses + 1);
-        var negative = false;
+        var sign = 1;
         if (remaining >= negativeStart) {
-            negative = true;
+            sign = -1;
             remaining -= negativeStart;
         }
         var kept = pulses;
@@ -106,7 +106,7 @@ class CeltPulseUtils {
             }
         }
         remaining -= pulseCount(left, kept);
-        return new PulseEntry(remaining, kept, signed(pulses - kept, negative));
+        return new PulseEntry(remaining, kept, sign * (pulses - kept));
     }
 
     private static PulseEntry decodeEntryWithFewPulses(final int left, final int pulses, final long index) {
@@ -116,9 +116,9 @@ class CeltPulseUtils {
             return new PulseEntry(index - low, pulses, 0);
         }
         var remaining = index;
-        var negative = false;
+        var sign = 1;
         if (remaining >= high) {
-            negative = true;
+            sign = -1;
             remaining -= high;
         }
         var kept = pulses;
@@ -126,23 +126,23 @@ class CeltPulseUtils {
             kept--;
         } while (pulseCount(kept, left) > remaining);
         remaining -= pulseCount(kept, left);
-        return new PulseEntry(remaining, kept, signed(pulses - kept, negative));
+        return new PulseEntry(remaining, kept, sign * (pulses - kept));
     }
 
     // The last two dimensions are decoded without tables.
     private static long decodeLastTwo(final int pulses, final long index, final int[] vector, final int position) {
         final var negativeStart = 2L * pulses + 1;
         var remaining = index;
-        var negative = false;
+        var sign = 1;
         if (remaining >= negativeStart) {
-            negative = true;
+            sign = -1;
             remaining -= negativeStart;
         }
         final var kept = (int) ((remaining + 1) / 2);
         if (kept != 0) {
             remaining -= 2L * kept - 1;
         }
-        final var first = signed(pulses - kept, negative);
+        final var first = sign * (pulses - kept);
         var second = kept;
         if (remaining != 0) {
             second = -kept;
@@ -150,13 +150,6 @@ class CeltPulseUtils {
         vector[position] = first;
         vector[position + 1] = second;
         return (long) first * first + (long) second * second;
-    }
-
-    private static int signed(final int magnitude, final boolean negative) {
-        if (negative) {
-            return -magnitude;
-        }
-        return magnitude;
     }
 
     /**

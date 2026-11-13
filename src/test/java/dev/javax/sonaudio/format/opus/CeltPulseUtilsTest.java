@@ -47,13 +47,14 @@ class CeltPulseUtilsTest {
         for (var index = 0L; index < count; index++) {
             final var norm = CeltPulseUtils.decodeVector(dimensions, pulses, index, vector);
             assertThat(Arrays.stream(vector).map(Math::abs).sum()).isEqualTo(pulses);
-            assertThat(Arrays.stream(vector).mapToLong(value -> (long) value * value).sum())
+            assertThat(Arrays.stream(vector)
+                            .mapToLong(value -> (long) value * value)
+                            .sum())
                     .isEqualTo(norm);
             seen.add(Arrays.stream(vector).boxed().toList());
         }
         assertThat(seen).hasSize((int) count);
     }
-
 
     // The index of a vector, which the encoder computes: the sum, over the entries from the last to the first, of the
     // vectors that come before it.
@@ -84,7 +85,9 @@ class CeltPulseUtilsTest {
                 final var index = Math.floorMod(random.nextLong(), count);
                 final var vector = new int[dimensions];
                 CeltPulseUtils.decodeVector(dimensions, pulses, index, vector);
-                assertThat(indexOf(vector)).as("%d dimensions, %d pulses", dimensions, pulses).isEqualTo(index);
+                assertThat(indexOf(vector))
+                        .as("%d dimensions, %d pulses", dimensions, pulses)
+                        .isEqualTo(index);
             }
         }
     }

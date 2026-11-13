@@ -30,6 +30,16 @@ record CeltFrame(int sizeShift, int channels, int startBand, int endBand, int fr
     }
 
     /**
+     * Scales a figure of eighths of a bit per band to this frame's channels and size, as FFmpeg's NORMC does.
+     *
+     * @param bits the figure for a single channel of the shortest frame, times four
+     * @return the figure for the frame
+     */
+    int scaleToFrame(final int bits) {
+        return bits << (channels - 1) << sizeShift >> 2;
+    }
+
+    /**
      * @param band a band
      * @return how many coefficients it has in this frame
      */

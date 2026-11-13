@@ -116,8 +116,7 @@ final class CeltEnergy {
                     model[index] << LAPLACE_ZERO_SHIFT, model[index + 1] << LAPLACE_DECAY_SHIFT);
         }
         if (available >= 2) {
-            final var symbol =
-                    rangeDecoder.decodeIcdf(CeltTables.SMALL_ENERGY_ICDF, CeltTables.SMALL_ENERGY_BITS);
+            final var symbol = rangeDecoder.decodeIcdf(CeltTables.SMALL_ENERGY_ICDF, CeltTables.SMALL_ENERGY_BITS);
             return (symbol >> 1) ^ -(symbol & 1);
         }
         if (available >= 1 && rangeDecoder.decodeBit(1)) {

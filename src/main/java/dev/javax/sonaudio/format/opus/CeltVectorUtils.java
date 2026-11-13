@@ -83,7 +83,8 @@ class CeltVectorUtils {
         if (2 * pulses >= length || spread == CeltSpread.NONE) {
             return;
         }
-        final var gain = (float) length / (float) (length + (ROTATION_BASE - ROTATION_STEP * spread.ordinal()) * pulses);
+        final var gain =
+                (float) length / (float) (length + (ROTATION_BASE - ROTATION_STEP * spread.ordinal()) * pulses);
         final var theta = (float) (Math.PI * gain * gain / 4);
         final var cosine = (float) Math.cos(theta);
         final var sine = (float) Math.sin(theta);

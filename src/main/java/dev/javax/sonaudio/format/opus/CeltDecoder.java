@@ -102,10 +102,7 @@ final class CeltDecoder {
         }
         final var blockMode = decodeBlockMode(rangeDecoder, sizeShift, frameBits, consumed);
         final var frame = new CeltFrame(sizeShift, coding.channelCount(), startBand, endBand, frameBits, blockMode);
-        System.out.println("DBG size=" + sizeShift + " silence=" + silence + " mode=" + blockMode + " pf=" + postfilter.period() + "," + java.util.Arrays.toString(postfilter.gains()) + " bits=" + frameBits + " tell=" + rangeDecoder.tell());
         decodeSpectrum(rangeDecoder, frame);
-        System.out.println("DBG after spectrum tell=" + rangeDecoder.tell());
-        { final var sb = new StringBuilder("DBG energies:"); for (var b = 0; b < 21; b++) { sb.append(String.format(" %.2f", energy.energy(0, b))); } System.out.println(sb); }
         synthesizeFrame(frame, silence, postfilter, output);
         energy.finishFrame(frame, frame.channels());
         noise.seed(rangeDecoder.range());
@@ -167,17 +164,15 @@ final class CeltDecoder {
         energy.decodeCoarse(rangeDecoder, frame);
         timeFrequency.decode(rangeDecoder, frame);
         final var allocation = allocator.allocate(rangeDecoder, frame);
-        { final var sb = new StringBuilder("DBG alloc coded=" + allocation.codedBands() + " spread=" + allocation.spread() + " rem=" + allocation.remainingBits() + " ac=" + allocation.anticollapseReserve() + " tf=" + java.util.Arrays.toString(timeFrequency.changes()) + " pulses:"); for (var b = 0; b < 21; b++) { sb.append(" " + allocator.pulses(b) + "/" + allocator.fineBits(b)); } System.out.println(sb); }
         energy.decodeFine(rangeDecoder, frame, allocator);
         bands.decodeBands(rangeDecoder, frame, allocation, allocator, timeFrequency.changes());
         var collapsed = false;
         if (allocation.anticollapseReserve() != 0) {
             collapsed = rangeDecoder.decodeRawBits(1) != 0;
-            System.out.println("DBG collapsed=" + collapsed);
         }
         energy.decodeFinal(rangeDecoder, frame, allocator);
         for (var channel = 0; channel < frame.channels(); channel++) {
-            if (collapsed && System.getenv("NOAC") == null) {
+            if (collapsed) {
                 antiCollapse.fillCollapsedBlocks(channel, frame, allocator, bands, bands.coefficients(channel));
             }
             energy.denormalize(channel, frame, bands.coefficients(channel));

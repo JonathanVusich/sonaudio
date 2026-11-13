@@ -95,8 +95,7 @@ final class CeltFft {
         }
     }
 
-    private void gather(
-            final float[] output, final int first, final int part, final int radix, final int twiddleStep) {
+    private void gather(final float[] output, final int first, final int part, final int radix, final int twiddleStep) {
         for (var residue = 0; residue < radix; residue++) {
             final var position = 2 * (first + residue * part);
             final var twiddle = residue * twiddleStep % length;
@@ -107,15 +106,15 @@ final class CeltFft {
         }
     }
 
-    private void spread(
-            final float[] output, final int start, final int radix, final int target, final int radixStep) {
+    private void spread(final float[] output, final int start, final int radix, final int target, final int radixStep) {
         var real = 0f;
         var imaginary = 0f;
         for (var residue = 0; residue < radix; residue++) {
             final var twiddle = (residue * target % radix) * radixStep;
-            real += gatheredReal[residue] * twiddleReal[twiddle] - gatheredImaginary[residue] * twiddleImaginary[twiddle];
-            imaginary +=
-                    gatheredReal[residue] * twiddleImaginary[twiddle] + gatheredImaginary[residue] * twiddleReal[twiddle];
+            real += gatheredReal[residue] * twiddleReal[twiddle]
+                    - gatheredImaginary[residue] * twiddleImaginary[twiddle];
+            imaginary += gatheredReal[residue] * twiddleImaginary[twiddle]
+                    + gatheredImaginary[residue] * twiddleReal[twiddle];
         }
         output[2 * start] = real;
         output[2 * start + 1] = imaginary;

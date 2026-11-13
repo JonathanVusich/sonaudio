@@ -111,7 +111,7 @@ class CeltVectorUtilsTest {
     void theHaarTransformPairsEntriesAStrideApart() {
         final var vector = new float[] {1f, 10f, 3f, 20f};
 
-        CeltVectorUtils.transformHaar(vector, 0, 4, 2);
+        CeltVectorUtils.transformHaar(vector, 0, 2, 2);
 
         final var root = (float) Math.sqrt(0.5);
         assertThat(vector[0]).isCloseTo(4 * root, within(1e-6f));

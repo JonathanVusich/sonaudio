@@ -53,7 +53,8 @@ final class CeltTimeFrequency {
 
     private void applySelection(
             final RangeDecoder rangeDecoder, final CeltFrame frame, final int selectBits, final int anyChange) {
-        final var table = CeltTables.TF_SELECT[frame.sizeShift()][frame.blockMode().ordinal()];
+        final var table =
+                CeltTables.TF_SELECT[frame.sizeShift()][frame.blockMode().ordinal()];
         var select = 0;
         if (selectBits != 0 && table[0][anyChange] != table[1][anyChange]) {
             select = flag(rangeDecoder, 1);

@@ -62,8 +62,7 @@ final class CeltMdct {
     }
 
     // Pairs the coefficients from the two ends (even ones from the front, odd ones from the back) as complex points.
-    private void rotateInput(
-            final float[] coefficients, final int firstCoefficient, final int coefficientStride) {
+    private void rotateInput(final float[] coefficients, final int firstCoefficient, final int coefficientStride) {
         final var half = size / 2;
         for (var index = 0; index < half; index++) {
             final var real = coefficients[firstCoefficient + 2 * index * coefficientStride];

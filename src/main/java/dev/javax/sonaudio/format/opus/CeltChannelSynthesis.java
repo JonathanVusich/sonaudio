@@ -18,9 +18,7 @@ final class CeltChannelSynthesis {
     private static final float DEEMPHASIS = (float) 0.8500061035;
     private static final float MIN_GAIN = Math.ulp(1.0f);
 
-    private final CeltMdct[] transforms = {
-        new CeltMdct(120), new CeltMdct(240), new CeltMdct(480), new CeltMdct(960)
-    };
+    private final CeltMdct[] transforms = {new CeltMdct(120), new CeltMdct(240), new CeltMdct(480), new CeltMdct(960)};
     private final float[] samples = new float[2048];
     private final float[] gains = new float[3];
     private final float[] previousGains = new float[3];
@@ -131,8 +129,8 @@ final class CeltChannelSynthesis {
         for (var index = 0; index < OVERLAP; index++) {
             final var weight = CeltWindowTables.WINDOW_SQUARED[index];
             final var x0 = samples[start + index - newerPeriod + 2];
-            samples[start + index] = (float) (samples[start + index]
-                    + crossFadeSum(start + index, oldPeriod, weight, x0, x1, x2, x3, x4));
+            samples[start + index] = (float)
+                    (samples[start + index] + crossFadeSum(start + index, oldPeriod, weight, x0, x1, x2, x3, x4));
             x4 = x3;
             x3 = x2;
             x2 = x1;
@@ -150,8 +148,12 @@ final class CeltChannelSynthesis {
             final float x3,
             final float x4) {
         final var old = (1.0 - weight) * previousGains[0] * samples[position - oldPeriod]
-                + (1.0 - weight) * previousGains[1] * (samples[position - oldPeriod - 1] + samples[position - oldPeriod + 1])
-                + (1.0 - weight) * previousGains[2] * (samples[position - oldPeriod - 2] + samples[position - oldPeriod + 2]);
+                + (1.0 - weight)
+                        * previousGains[1]
+                        * (samples[position - oldPeriod - 1] + samples[position - oldPeriod + 1])
+                + (1.0 - weight)
+                        * previousGains[2]
+                        * (samples[position - oldPeriod - 2] + samples[position - oldPeriod + 2]);
         return old + weight * gains[0] * x2 + weight * gains[1] * (x1 + x3) + weight * gains[2] * (x0 + x4);
     }
 
