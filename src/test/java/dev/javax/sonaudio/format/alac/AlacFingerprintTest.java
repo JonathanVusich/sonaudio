@@ -8,8 +8,10 @@ import dev.javax.sonaudio.samples.FateAlacCase;
 import dev.javax.sonaudio.samples.FateSamples;
 import dev.javax.sonaudio.samples.FingerprintAudioSample;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -46,6 +48,29 @@ class AlacFingerprintTest {
     @Test
     void fingerprintsInsideM4aAsFpcalcDoes() throws IOException, InvalidFormatException {
         assertSameFingerprint(FateSamples.insideFile(), FateSamples.fpcalcOutput("inside.m4a"));
+    }
+
+    // The file's edit list starts in the middle of its second packet, which drops the first. FFmpeg's command line,
+    // which decodes with several threads, then keeps 1904 samples it should have skipped, but libavcodec does not when
+    // it decodes in one thread, as fpcalc does. This is fpcalc's fingerprint of the bytes that this builds: the same
+    // as that of ffmpeg -threads 1's output, and not as that of its output with its default threads.
+    @Test
+    void fingerprintsAFileWhoseEditListDropsItsFirstPacketAsFpcalcDoes() throws IOException, InvalidFormatException {
+        final var sample = FingerprintAudioSample.ALAC_CHORDS_8000HZ_MONO;
+        final var bytes = sample.inputStream().readAllBytes();
+        final var edited = AlacTestFiles.withEditList(bytes, new long[][] {{150000, 6000}});
+
+        final var fingerprint = new Fingerprint(
+                new AlacParser().parse(new SeekableInMemoryByteChannel(edited)).audio());
+
+        assertThat(fingerprint.compressed()).isEqualTo(editListFingerprint());
+    }
+
+    private static String editListFingerprint() throws IOException {
+        final var resource = "/dev/javax/sonaudio/fingerprint/alac_chords_8000hz_mono_edit_list.txt";
+        try (final var inputStream = AlacFingerprintTest.class.getResourceAsStream(resource)) {
+            return new String(inputStream.readAllBytes(), StandardCharsets.US_ASCII).trim();
+        }
     }
 
     private static void assertSameFingerprint(final Path file, final Path fpcalcOutput)
