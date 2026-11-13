@@ -2,6 +2,7 @@ package dev.javax.sonaudio.fingerprint;
 
 import static dev.javax.sonaudio.internal.ResamplerUtils.extendedSample;
 
+import dev.javax.sonaudio.internal.ResamplerCursor;
 import dev.javax.sonaudio.internal.ResamplerFilter;
 import java.util.Arrays;
 
@@ -20,12 +21,8 @@ final class Resampler {
     private final int inputRate;
     private final int outputRate;
     private final int filterLength;
-    private final int phaseCount;
     private final int filterStride;
     private final ResamplerFilter filter;
-    private final int sourceIncrement;
-    private final int incrementQuotient;
-    private final int incrementRemainder;
 
     private enum End {
         OPEN,
@@ -37,11 +34,7 @@ final class Resampler {
         this.outputRate = outputRate;
         this.filter = new ResamplerFilter(inputRate, outputRate, CUTOFF, PHASE_SHIFT);
         this.filterLength = filter.filterLength();
-        this.phaseCount = filter.phaseCount();
         this.filterStride = filter.filterStride();
-        this.sourceIncrement = filter.sourceIncrement();
-        this.incrementQuotient = filter.incrementQuotient();
-        this.incrementRemainder = filter.incrementRemainder();
     }
 
     /**
@@ -72,48 +65,34 @@ final class Resampler {
         final var window = new float[filterStride];
         var available = length;
         var count = 0;
-        var index = 0;
-        var fraction = 0;
-        var start = -(filterLength - 1) / 2;
+        final var cursor = new ResamplerCursor(-(filterLength - 1) / 2);
         var reflectionPending = end == End.ENDED;
         while (true) {
-            if (start + filterLength > available) {
+            if (cursor.position() + filterLength > available) {
                 if (!reflectionPending) {
                     break;
                 }
-                available += reflectionLength(length - start);
+                available += reflectionLength(length - cursor.position());
                 reflectionPending = false;
                 continue;
             }
-            output[count++] = sampleAt(input, length, window, start, index, fraction);
-            fraction += incrementRemainder;
-            index += incrementQuotient;
-            if (fraction >= sourceIncrement) {
-                fraction -= sourceIncrement;
-                index++;
-            }
-            start += index / phaseCount;
-            index %= phaseCount;
+            output[count++] = sampleAt(input, length, window, cursor);
+            cursor.advance(filter);
         }
         return Arrays.copyOf(output, count);
     }
 
     // The output sample for a filter starting at a position in the audio. A filter that reaches past either end is
     // given a copy of its samples with the mirror image of the start and the reflection of the end in place.
-    private float sampleAt(
-            final float[] input,
-            final int length,
-            final float[] window,
-            final int start,
-            final int index,
-            final int fraction) {
+    private float sampleAt(final float[] input, final int length, final float[] window, final ResamplerCursor cursor) {
+        final var start = cursor.position();
         if (start >= 0 && start + filterStride <= length) {
-            return filter.outputSample(input, start, index, fraction);
+            return filter.outputSample(input, start, cursor.phase(), cursor.fraction());
         }
         for (var i = 0; i < filterStride; i++) {
             window[i] = extendedSample(input, length, start + i);
         }
-        return filter.outputSample(window, 0, index, fraction);
+        return filter.outputSample(window, 0, cursor.phase(), cursor.fraction());
     }
 
     // How many samples libswresample reflects off the end of the audio, from what it hasn't finished with.

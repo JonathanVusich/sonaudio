@@ -1,5 +1,6 @@
 package dev.javax.sonaudio.format.opus;
 
+import dev.javax.sonaudio.internal.ResamplerCursor;
 import dev.javax.sonaudio.internal.ResamplerFilter;
 import java.util.Arrays;
 
@@ -49,10 +50,7 @@ final class SilkResampler {
     private Start start = Start.AWAITING_SAMPLES;
     // How many samples of the buffer are in use, and where in them the filter for the next output sample begins.
     private int sampleCount;
-    private int position;
-    // The next output sample's phase of the filter, and how far it is on towards the one after.
-    private int phase;
-    private int fraction;
+    private ResamplerCursor cursor = new ResamplerCursor(0);
 
     /**
      * @param outputChannels how many channels are resampled, 1 or 2
@@ -89,9 +87,7 @@ final class SilkResampler {
         inputSampleRate = bandwidth.silkSampleRate();
         filter = filters[bandwidth.silkBandwidth().ordinal()];
         start = Start.AWAITING_SAMPLES;
-        position = 0;
-        phase = 0;
-        fraction = 0;
+        cursor = new ResamplerCursor(0);
         // The first filter reaches over as many samples before the audio as the mirror image will fill in.
         sampleCount = centre();
         appendSilence(SILENCE_SAMPLES[bandwidth.ordinal()]);
@@ -181,44 +177,34 @@ final class SilkResampler {
             return 0;
         }
         var written = 0;
-        while (written < outputCapacity && position + filter.filterLength() <= sampleCount) {
+        while (written < outputCapacity && cursor.position() + filter.filterLength() <= sampleCount) {
             for (var channel = 0; channel < outputChannels; channel++) {
                 output[channel][outputOffset + written] =
-                        filter.outputSample(samples[channel], position, phase, fraction);
+                        filter.outputSample(samples[channel], cursor.position(), cursor.phase(), cursor.fraction());
             }
-            moveToNextOutputSample();
+            cursor.advance(filter);
             written++;
         }
         return written;
     }
 
-    private void moveToNextOutputSample() {
-        fraction += filter.incrementRemainder();
-        phase += filter.incrementQuotient();
-        if (fraction >= filter.sourceIncrement()) {
-            fraction -= filter.sourceIncrement();
-            phase++;
-        }
-        position += phase / filter.phaseCount();
-        phase %= filter.phaseCount();
-    }
-
     // Keeps only the samples that a later output sample's filter reaches over.
     private void discardConsumedSamples() {
-        if (start == Start.AWAITING_SAMPLES || position == 0) {
+        if (start == Start.AWAITING_SAMPLES || cursor.position() == 0) {
             return;
         }
+        final var consumed = cursor.position();
         for (var channel = 0; channel < outputChannels; channel++) {
-            System.arraycopy(samples[channel], position, samples[channel], 0, sampleCount - position);
+            System.arraycopy(samples[channel], consumed, samples[channel], 0, sampleCount - consumed);
         }
-        sampleCount -= position;
-        position = 0;
+        sampleCount -= consumed;
+        cursor.dropInput(consumed);
     }
 
     // Appends the mirror image of the last of the samples that haven't been used up, as many as half a filter's length
     // at most.
     private void reflectEnd() {
-        final var unused = sampleCount - position;
+        final var unused = sampleCount - cursor.position();
         final var reflection = (Math.min(unused, filter.filterLength()) + 1) / 2;
         for (var channel = 0; channel < outputChannels; channel++) {
             for (var distance = 0; distance < reflection; distance++) {
