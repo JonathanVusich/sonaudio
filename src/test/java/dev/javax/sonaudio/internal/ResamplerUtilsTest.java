@@ -1,4 +1,4 @@
-package dev.javax.sonaudio.fingerprint;
+package dev.javax.sonaudio.internal;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
