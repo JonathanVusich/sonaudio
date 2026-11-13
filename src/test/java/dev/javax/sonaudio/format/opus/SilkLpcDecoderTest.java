@@ -20,6 +20,7 @@ class SilkLpcDecoderTest {
     private static final SilkLayout TWO_SUBFRAMES = new SilkLayout(OpusBandwidth.NARROWBAND, 10);
     private static final SilkLayout FOUR_SUBFRAMES = new SilkLayout(OpusBandwidth.NARROWBAND, 20);
 
+    private final SilkLpcConverter converter = new SilkLpcConverter();
     private final SilkLpcDecoder decoder = new SilkLpcDecoder();
     private final SilkChannelState state = new SilkChannelState();
 
@@ -31,7 +32,7 @@ class SilkLpcDecoderTest {
 
         final var expectedNlsf = codebookFrequencies(STAGE_ONE_INDEX);
         assertThat(Arrays.copyOf(state.nlsf(), ORDER)).isEqualTo(Arrays.copyOf(expectedNlsf, ORDER));
-        final var expected = SilkLpcUtils.nlsfToLpc(expectedNlsf, ORDER);
+        final var expected = converter.nlsfToLpc(expectedNlsf, ORDER);
         for (var tap = 0; tap < ORDER; tap++) {
             assertThat(lpc.coefficient(0, tap)).isEqualTo(expected[tap]);
             assertThat(lpc.coefficient(1, tap)).isEqualTo(expected[tap]);
@@ -65,8 +66,8 @@ class SilkLpcDecoderTest {
         final var lpc = decoder.decode(
                 encodeFilterWithInterpolation(NEXT_STAGE_ONE_INDEX, 2), FOUR_SUBFRAMES, state, SilkSignalType.UNVOICED);
 
-        final var leadIn = SilkLpcUtils.nlsfToLpc(halfway, ORDER);
-        final var body = SilkLpcUtils.nlsfToLpc(current, ORDER);
+        final var leadIn = converter.nlsfToLpc(halfway, ORDER);
+        final var body = converter.nlsfToLpc(current, ORDER);
         assertThat(lpc.interpolationFactor()).isEqualTo(2);
         for (var tap = 0; tap < ORDER; tap++) {
             assertThat(lpc.coefficient(0, tap)).isEqualTo(leadIn[tap]);
@@ -81,7 +82,7 @@ class SilkLpcDecoderTest {
         decoder.decode(
                 encodeFilterWithInterpolation(STAGE_ONE_INDEX, 4), FOUR_SUBFRAMES, state, SilkSignalType.UNVOICED);
         state.finishFrame(FOUR_SUBFRAMES.frameLength(), SilkSignalType.UNVOICED);
-        final var previous = SilkLpcUtils.nlsfToLpc(codebookFrequencies(STAGE_ONE_INDEX), ORDER);
+        final var previous = converter.nlsfToLpc(codebookFrequencies(STAGE_ONE_INDEX), ORDER);
 
         final var lpc = decoder.decode(
                 encodeFilterWithInterpolation(NEXT_STAGE_ONE_INDEX, 0), FOUR_SUBFRAMES, state, SilkSignalType.UNVOICED);
@@ -98,7 +99,9 @@ class SilkLpcDecoderTest {
         for (var index = 0; index < ORDER; index++) {
             frequencies[index] = SilkTables.LSF_CODEBOOK_NBMB[stageOneIndex][index] * 128;
         }
-        return SilkLpcUtils.stabilisedNlsf(frequencies, ORDER, SilkTables.LSF_MIN_SPACING_NBMB);
+        return converter
+                .stabilisedNlsf(frequencies, ORDER, SilkTables.LSF_MIN_SPACING_NBMB)
+                .clone();
     }
 
     private RangeDecoder encodeFilter(final int stageOneIndex) {

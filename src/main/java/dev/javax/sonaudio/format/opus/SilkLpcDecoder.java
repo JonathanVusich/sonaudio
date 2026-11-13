@@ -78,8 +78,11 @@ final class SilkLpcDecoder {
         }
     }
 
+    private final SilkLpcConverter converter = new SilkLpcConverter();
     private final int[] residualIndices = new int[SilkLpcUtils.MAX_ORDER];
     private final int[] residuals = new int[SilkLpcUtils.MAX_ORDER];
+    private final int[] frequencies = new int[SilkLpcUtils.MAX_ORDER];
+    private final int[] interpolatedFrequencies = new int[SilkLpcUtils.MAX_ORDER];
 
     /**
      * Reads a frame's filter and makes it the channel's last one.
@@ -138,16 +141,17 @@ final class SilkLpcDecoder {
         }
     }
 
-    // The codebook's frequencies moved by their residuals, divided by the weights, and then stabilised.
+    // The codebook's frequencies moved by their residuals, divided by the weights, and then stabilised, in a buffer
+    // that
+    // the converter rewrites.
     private int[] stabilisedNlsf(final BandwidthTables tables, final int order, final int stage1) {
-        final var nlsf = new int[SilkLpcUtils.MAX_ORDER];
         for (var index = 0; index < order; index++) {
             final var codebookValue = tables.codebook[stage1][index];
             final var weight = tables.weights[stage1][index];
             final var value = codebookValue * CODEBOOK_STEP + (residuals[index] * RESIDUAL_WEIGHT_UNIT) / weight;
-            nlsf[index] = Math.clamp(value, 0, NLSF_MAX);
+            frequencies[index] = Math.clamp(value, 0, NLSF_MAX);
         }
-        return SilkLpcUtils.stabilisedNlsf(nlsf, order, tables.minimumSpacing);
+        return converter.stabilisedNlsf(frequencies, order, tables.minimumSpacing);
     }
 
     // A frame of four subframes may say how far to interpolate its first two subframes' frequencies from the last
@@ -166,7 +170,7 @@ final class SilkLpcDecoder {
                 leadIn = leadInFilter(state, nlsf, order, offset);
             }
         }
-        final var body = SilkLpcUtils.nlsfToLpc(nlsf, order);
+        final var body = converter.nlsfToLpc(nlsf, order);
         System.arraycopy(nlsf, 0, state.nlsf(), 0, order);
         System.arraycopy(body, 0, state.lpc(), 0, order);
         return new SilkLpc(body, leadIn, leadInUse, factor);
@@ -179,10 +183,10 @@ final class SilkLpcDecoder {
             return Arrays.copyOf(state.lpc(), SilkLpcUtils.MAX_ORDER);
         }
         final var previous = state.nlsf();
-        final var interpolated = new int[SilkLpcUtils.MAX_ORDER];
         for (var index = 0; index < order; index++) {
-            interpolated[index] = (short) (previous[index] + (((nlsf[index] - previous[index]) * offset) >> 2));
+            interpolatedFrequencies[index] =
+                    (short) (previous[index] + (((nlsf[index] - previous[index]) * offset) >> 2));
         }
-        return SilkLpcUtils.nlsfToLpc(interpolated, order);
+        return converter.nlsfToLpc(interpolatedFrequencies, order);
     }
 }

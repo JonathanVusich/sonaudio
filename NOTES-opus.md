@@ -28,7 +28,7 @@ against the 9.0.2 binary in `sonaudio-ref` (framecrc, ffprobe, s16le sizes).
 ## Plug points (exact signatures; all package-private, in `format/opus`)
 
 ```java
-final class SilkDecoder {                 // SILK agent: replace the body of decodeFrame and reset
+final class SilkDecoder {                 // DONE (see "SILK" below)
     static final int MAX_FRAME_SAMPLES = 960;
     SilkDecoder(int outputChannels)       // 1 or 2: how the stream is OUTPUT (the header's), not how a packet codes it
     int decodeFrame(RangeDecoder rangeDecoder, OpusBandwidth bandwidth, ChannelCoding coding,
@@ -43,7 +43,7 @@ final class CeltDecoder {                 // CELT agent: replace the body of dec
                      int endBand, float[][] output) throws InvalidFormatException
     void reset()
 }
-final class SilkResampler {               // OWNER: whoever finishes SILK first (nobody's brief had it)
+final class SilkResampler {               // DONE (see "SILK" below): libswresample's filter, mirror start and reflected end
     SilkResampler(int outputChannels)
     ResamplerState state();               // CLOSED / OPEN
     int inputSampleRate();                // 8000, 12000 or 16000 of the open resampler
@@ -76,13 +76,61 @@ The full contracts are in the Javadoc of those three files; the short version:
 - Throwing `InvalidFormatException` is how a frame is declared undecodable: FFmpeg then outputs silence of the frame's
   length (`OpusStream.decodeFrameOrSilence`), which is already implemented. No exception may escape otherwise.
 
-### The stubs
-`SilkDecoder`, `CeltDecoder` and `SilkResampler` write **silence** and **consume nothing** from the range decoder.
-Consequences you will see until they are real: in SILK-only mode `tell()` stays at 1, so `OpusStream.readRedundancy`
-always "finds" a redundancy frame (a garbage path that decodes a stub CELT frame and fades silence: harmless, and it
-cannot change a frame's sample count); in hybrid mode the redundancy flag is read from the untouched stream and may
-produce `size > frameSize`, which zero-fills the frame, again without changing its length (hybrid has no resampler
-delay). The shape test asserts counts and channels only.
+### The CELT stub
+`CeltDecoder` writes **silence** and **consumes nothing** from the range decoder (`SilkDecoder` and `SilkResampler` are
+real now). Consequences you will see until it is real: in hybrid mode the redundancy flag is read from the stream right
+after the SILK layer, where CELT would have read on, so it may produce `size > frameSize`, which zero-fills the frame,
+without changing its length; and a redundancy frame decodes a stub CELT frame and fades silence, which is harmless. The
+shape test asserts counts and channels only.
+
+## SILK (done: `SilkDecoder`, `SilkResampler` and the `Silk*` classes beside them)
+
+Result: every SILK-only `OpusSample` and FATE `testvector02`, `03`, `04`, `silk-lbrr-mono` decode to FFmpeg's samples with
+the same length and every 16-bit sample within 1 (`OpusSilkParityTest`: at most 24 samples differ, by exactly 1, in
+1.2 M samples; the 12 stereo/mono fixtures of 11520 samples differ in 0 to 7). The SILK arithmetic is FFmpeg's float
+arithmetic step for step (the differences left come from the resampler summing in doubles, where FFmpeg's SIMD sums
+floats). Layout: `SilkDecoder` (superframe, flags, frame parameters, stereo weights), `SilkLpcDecoder` (NLSFs and their
+interpolation) with `SilkLpcConverter` (the integer NLSF to LPC arithmetic, tested against FFmpeg's own functions
+compiled on their own in the reference image) and `SilkLpcUtils`, `SilkExcitation` (shell coding), `SilkSynthesis` (LTP
+and LPC filters), `SilkStereoMixer`, `SilkChannelState` (per channel history), `SilkModels` and `SilkTables` (generated
+from `tab.c`: the models as inverse CDFs for `RangeDecoder.decodeIcdf`; the two LBRR flag models have no symbol 0, so
+the decoder adds 1 to what they decode, as libopus does).
+
+Behaviour of FFmpeg's `silk.c` that the decoder reproduces, and the RFC (and so a port of libopus) would not:
+
+- **The output is two samples late.** Mono (and the mid channel when the stream is output as mono) is copied from two
+  samples before the frame's start; the stereo unmix reads the mid and side samples one before each output position,
+  with the mid lowpass centred on that one. The frame's first two samples are the previous frame's last two, or zeros.
+- **LBRR frames are decoded and dropped, but they update state**: the gain, NLSFs, filter and pitch lag of the channel
+  (not `coded`, `prev_voiced` or the output), and the stereo weights, which the real frame then overwrites.
+- **`ff_silk_flush` resets a channel only if it has decoded a frame to the end** (`coded`). A side channel that only
+  decoded its parameters (stream output as mono, or an LBRR frame) keeps them across a flush.
+- **The range limiting of the LPC coefficients only looks at the first coefficient**: the search for the largest
+  compares `lpc32[k]` with the maximum so far instead of `lpc32[j]`, so `k` stays 0 (RFC: the largest). It is
+  reproduced exactly (`SilkLpcConverter.limitRange`), including that the chirp's divisor then uses `k + 1 = 1`.
+- **Bandwidth changes are not resets**: the filter history, NLSFs and LPCs of the other rate are reinterpreted at the
+  new one, with stale entries beyond the new order. Only CELT frames and mono to stereo reset.
+- **Coded stereo output as mono** outputs the mid channel without the side prediction, and the side channel's
+  excitation is still decoded (for the bits after it) but it isn't synthesised.
+- The mid-only flag is only read when the side channel's VAD flag is inactive; in an LBRR frame the mid channel's
+  copy reads it unless the side channel has a copy too.
+
+`SilkResampler` is libswresample with `filter_size=16` and its defaults (cutoff 0.97, up to 1024 phases, linear
+interpolation which never happens as the ratios 6, 4 and 3 are exact, Kaiser beta 9), in floating point. The
+filter bank and its stepping are `internal.ResamplerFilter`, which the fingerprint package's `Resampler` also uses (with
+its own cutoff of 0.8 and 256 phases); the streaming logic is the resampler's own. As swr does, the first output waits
+for 17 input samples (silence included) and then the audio before the first sample is the mirror image of what follows;
+each call gives as many outputs as the filter can finish, up to the capacity, so the rest stay for the next call
+(wideband holds 9 samples more than it gives); `flush` appends a reflection of half a filter's length of the last
+unused samples first. `SilkResamplerTest` checks all three rates against `ffmpeg -af aresample=...:filter_size=16`
+(first frames, the second frame's outputs and the 24 samples of a narrowband flush, within 2e-6).
+
+Not verified (no fixture reaches it): a stereo-coded packet in a stream output as mono (`SilkDecoder(1)` with
+`ChannelCoding.STEREO`); LBRR frames of a stereo packet (only the hybrid `silk-lbrr` has them, so they wait for CELT);
+bandwidth changes (testvector12 switches them, but it also has hybrid frames and CELT frames, so it can't pass until
+CELT exists; 1094 of its 1332 windows of 960 samples are within 1 of FFmpeg's, and 4 of testvector09's 1378, windows
+being whole-file and not separated by mode). Stereo to mono and mono to stereo switches within a stream are exercised by
+testvector02, 03 and 04 (and mid-only frames by them and by the 10 ms wideband stereo fixture).
 
 ## Range decoder (`RangeDecoder`)
 
@@ -103,8 +151,10 @@ SILK is resampled to 48 kHz by libswresample (`dec.c` `swr_*`, filter_size 16). 
 is opened comes out `frame_duration - D` samples long where **D = 24 for narrowband and 0 for mediumband, wideband and
 the SILK layer of hybrid** (measured on `silk_{nb,mb,wb}_*` and the hybrid fixtures; frame size does not matter). Later
 frames are complete. The held-back D samples come out (a) before the next CELT frame, (b) when SILK changes rate, (c) as
-a **separate frame after the last packet's** (FFmpeg's drain). `OpusStream` models this with `SilkResampler`'s stub and
-`delayedSamples`; the real resampler must reproduce the same counts (it will if it is swr-equivalent). Verified: every
+a **separate frame after the last packet's** (FFmpeg's drain). `OpusStream` models this with `SilkResampler` and
+`delayedSamples`; the real resampler (see "SILK") produces these counts from the filter itself, not from a constant:
+the filter reaches 8 samples ahead and waits for 17 samples to mirror the start, so the silence of 4 samples at 8 kHz
+falls 4 input samples = 24 output samples short, and at 12 and 16 kHz it falls short of nothing. Verified: every
 `OpusSample` and every FATE vector (including those that switch modes: testvector09, 12) has exactly FFmpeg's sample count.
 
 ## FFmpeg quirks found / reproduced
@@ -151,8 +201,8 @@ a **separate frame after the last packet's** (FFmpeg's drain). `OpusStream` mode
 
 ## Not implemented / not verified
 
-- SILK, CELT, the SWR resampler: stubs (silence). Hybrid, mode transitions, redundancy and fades are wired but have only
-  run on silence; the fade math (`RedundancyFadeUtils`) is unit tested against `ff_celt_window2`'s values.
+- CELT: a stub (silence). Hybrid, mode transitions, redundancy and fades are wired but have only
+  run with silent CELT; the fade math (`RedundancyFadeUtils`) is unit tested against `ff_celt_window2`'s values.
 - The output-gain multiply is untestable on silence (applied to zeros); channel mapping is tested at the
   `OpusStreamInfo.channelSources` level and by channel counts on `surround51` and tron.
 - Multistream with streams of different delays (quirk 5) is untested.

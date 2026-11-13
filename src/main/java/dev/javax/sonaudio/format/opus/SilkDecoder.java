@@ -137,11 +137,7 @@ final class SilkDecoder {
         final var activity = new int[codedChannels];
         final var redundancy = new int[codedChannels];
         for (var channel = 0; channel < codedChannels; channel++) {
-            for (var frame = 0; frame < frameCount; frame++) {
-                if (rangeDecoder.decodeBit(1)) {
-                    activity[channel] |= 1 << frame;
-                }
-            }
+            activity[channel] = readActivityFlags(rangeDecoder, frameCount);
             if (rangeDecoder.decodeBit(1)) {
                 redundancy[channel] = 1;
             }
@@ -152,6 +148,17 @@ final class SilkDecoder {
             }
         }
         return new SilkHeader(activity, redundancy);
+    }
+
+    // The voice activity flag of each of the frames, as a bit mask with the first frame's in the lowest bit.
+    private int readActivityFlags(final RangeDecoder rangeDecoder, final int frameCount) {
+        var flags = 0;
+        for (var frame = 0; frame < frameCount; frame++) {
+            if (rangeDecoder.decodeBit(1)) {
+                flags |= 1 << frame;
+            }
+        }
+        return flags;
     }
 
     // A packet of 40 or 60 ms says which of its frames have a redundancy copy, as a bit mask from 1: its model has no

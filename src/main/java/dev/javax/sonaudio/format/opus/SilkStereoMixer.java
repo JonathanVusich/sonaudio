@@ -56,12 +56,8 @@ final class SilkStereoMixer {
                 SilkTables.STEREO_INTERP_LEN[layout.bandwidth().ordinal()];
         final var midStart = SilkChannelState.HISTORY - frameLength;
         for (var index = 0; index < frameLength; index++) {
-            var prediction = predictionWeight;
-            var midGain = midWeight;
-            if (index < interpolationLength) {
-                prediction = interpolate(previousPredictionWeight, predictionWeight, index, interpolationLength);
-                midGain = interpolate(previousMidWeight, midWeight, index, interpolationLength);
-            }
+            final var prediction = weightAt(previousPredictionWeight, predictionWeight, index, interpolationLength);
+            final var midGain = weightAt(previousMidWeight, midWeight, index, interpolationLength);
             final var filtered = lowpassedMid(mid.output(), midStart + index);
             final var midSample = mid.output()[midStart + index - 1];
             final var sideSample = side.output()[midStart + index - 1];
@@ -72,7 +68,12 @@ final class SilkStereoMixer {
         previousMidWeight = midWeight;
     }
 
-    private float interpolate(final float previous, final float current, final int index, final int length) {
+    // The weight at a sample of the frame: it moves in a straight line from the previous frame's over the first
+    // samples, and is the new weight from then on.
+    private float weightAt(final float previous, final float current, final int index, final int length) {
+        if (index >= length) {
+            return current;
+        }
         return previous + index * (current - previous) / length;
     }
 

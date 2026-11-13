@@ -50,18 +50,11 @@ final class SilkSynthesis {
             final SilkChannelState state, final SilkLayout layout, final SilkSideInfo sideInfo, final int subframe) {
         final var length = layout.subframeLength();
         final var start = RESIDUAL_HISTORY + subframe * length;
-        final var lpc = sideInfo.lpc();
-        var rewhitenEnd = -subframe * length;
-        var scale = sideInfo.ltpScale();
-        if (subframe >= 2 && lpc.interpolationFactor() != UNINTERPOLATED) {
-            rewhitenEnd = -(subframe - 2) * length;
-            scale = UNIT_SCALE;
-        }
-        final var gain = sideInfo.gain(subframe);
+        final var rewhitenEnd = rewhitenEnd(layout, sideInfo, subframe);
         final var lag = sideInfo.pitchLag(subframe);
-        rewhiten(state, layout, sideInfo, subframe, -lag - LTP_RADIUS, rewhitenEnd, scale);
+        rewhiten(state, layout, sideInfo, subframe, -lag - LTP_RADIUS, rewhitenEnd);
         if (rewhitenEnd != 0) {
-            final var rescale = sideInfo.gain(subframe - 1) / gain;
+            final var rescale = sideInfo.gain(subframe - 1) / sideInfo.gain(subframe);
             for (var offset = rewhitenEnd; offset < 0; offset++) {
                 residual[start + offset] *= rescale;
             }
@@ -69,6 +62,25 @@ final class SilkSynthesis {
         for (var offset = 0; offset < length; offset++) {
             residual[start + offset] = longTermPrediction(sideInfo, subframe, start + offset);
         }
+    }
+
+    // How far, relative to the start of the subframe, the history is rewhitened under its own filter: up to the start
+    // of the frame, or, for the later subframes of a frame whose first two have another filter, up to the start of the
+    // subframe two before; the samples after that, back to the subframe, are scaled by the change of gain instead.
+    private int rewhitenEnd(final SilkLayout layout, final SilkSideInfo sideInfo, final int subframe) {
+        if (subframe >= 2 && sideInfo.lpc().interpolationFactor() != UNINTERPOLATED) {
+            return -(subframe - 2) * layout.subframeLength();
+        }
+        return -subframe * layout.subframeLength();
+    }
+
+    // How much of the long-term prediction is kept in the rewhitened residual: all of it, but for a subframe that is
+    // rewhitened under a filter of its own.
+    private float rewhitenScale(final SilkSideInfo sideInfo, final int subframe) {
+        if (subframe >= 2 && sideInfo.lpc().interpolationFactor() != UNINTERPOLATED) {
+            return UNIT_SCALE;
+        }
+        return sideInfo.ltpScale();
     }
 
     // The residual from offset "from" up to "to" before the subframe's start: the output minus the filter's
@@ -79,8 +91,8 @@ final class SilkSynthesis {
             final SilkSideInfo sideInfo,
             final int subframe,
             final int from,
-            final int to,
-            final float scale) {
+            final int to) {
+        final var scale = rewhitenScale(sideInfo, subframe);
         final var output = state.output();
         final var lpc = sideInfo.lpc();
         final var order = layout.order();
