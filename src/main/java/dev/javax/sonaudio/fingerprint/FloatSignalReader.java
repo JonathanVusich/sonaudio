@@ -139,7 +139,7 @@ final class FloatSignalReader {
             for (var channel = 0; channel < channelCount; channel++) {
                 resampled[channel] = resampledChannel(channels[channel]);
             }
-            return SignalUtils.mixedDown(resampled, resampled[0].length);
+            return SignalUtils.mixedDownFromVorbisLayout(resampled, resampled[0].length);
         }
 
         private float[] resampledChannel(final float[] samples) {

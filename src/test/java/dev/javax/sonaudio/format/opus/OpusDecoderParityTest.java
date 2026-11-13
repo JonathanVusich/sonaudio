@@ -143,7 +143,8 @@ class OpusDecoderParityTest {
         final var count = Math.max(1, Math.min(decoded.length, referenceSamples));
         var squaredError = 0L;
         for (var position = 0; position < Math.min(decoded.length, referenceSamples); position++) {
-            final var difference = (long) reference.getShort(shiftBytes + position * BYTES_PER_SAMPLE) - decoded[position];
+            final var difference =
+                    (long) reference.getShort(shiftBytes + position * BYTES_PER_SAMPLE) - decoded[position];
             squaredError += difference * difference;
         }
         final var scaled = squaredError / count * DEVIATION_SCALE * DEVIATION_SCALE
