@@ -26,8 +26,30 @@ import java.util.NoSuchElementException;
  * none at all, which is not a frame.
  *
  * <p>The decoding of a packet is {@link OpusStream}'s, for each coded stream, which the file's channel mapping then
- * assembles into the file's channels. The SILK and CELT decoders it relies on are not written yet, so until they are,
- * every sample is silence, though the number of them and the channels are right.
+ * assembles into the file's channels.
+ *
+ * <p>Its samples match FFmpeg's within 1 at 16 bits on the FATE vectors and on the fixtures, and in the number of
+ * samples exactly. They are not bit for bit, because FFmpeg's own result depends on the machine: its x86 SIMD
+ * post-filter and de-emphasis, and probably its FFTs, round differently from its C code by 1 least significant bit in
+ * about one sample in ten thousand (the reference image's FFmpeg and its {@code -cpuflags 0} output differ so), and this
+ * decoder does the C arithmetic, in the same order and precision.
+ *
+ * <p>What it reproduces of FFmpeg, where the RFC and libopus do otherwise:
+ *
+ * <ul>
+ *   <li>The output gain is applied once for each output channel, in order, so a channel that is a copy of an earlier
+ *       one (a mapping that repeats an index) is scaled twice. The gain is 10 to the power of the header's Q7.8 value
+ *       over 20 times 256, as a float, and is applied only when it isn't 0.
+ *   <li>A packet that fails to parse, or whose coded streams differ in duration, is dropped whole, and every later
+ *       frame has {@link FrameContinuity#AFTER_DECODING_ERROR}. A frame inside a good packet
+ *       that can't be decoded is silence of its length, and is no error.
+ *   <li>The streams of a multistream packet are synchronised by the fewest samples any gave, and the rest wait for the
+ *       next packet. FFmpeg's own accounting loses samples when the streams' delays differ (it indexes the buffered
+ *       tail from the wrong base), which this doesn't reproduce, and no fixture has such delays: the four streams of
+ *       the FATE {@code tron.6ch.tinypkts} are all CELT.
+ *   <li>The SILK resampler's held-back samples come out as a frame of their own after the last packet, as FFmpeg's
+ *       drain gives them.
+ * </ul>
  */
 public final class OpusDecoder implements FloatPcmAudio {
 

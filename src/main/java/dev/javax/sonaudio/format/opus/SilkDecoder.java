@@ -17,6 +17,32 @@ import dev.javax.sonaudio.exception.InvalidFormatException;
  * decoded history (the output and the filter's state, the pitch lag, gain and filter of the previous frame), the
  * stereo prediction weights of the previous frame, and how many channels were coded in the frame before, so a stream
  * that goes from mono to stereo starts the side channel from nothing.
+ *
+ * <p>What FFmpeg's decoder does that the RFC's doesn't, and this reproduces:
+ *
+ * <ul>
+ *   <li>The output is two samples late. Mono, and the mid channel of a stream output as mono, is copied from two
+ *       samples before the frame's start, and the stereo unmixing reads the mid and side channels one sample before
+ *       each output position, with the mid lowpass centred on that one. The first two samples of a frame are the
+ *       previous frame's last two, or zeros.
+ *   <li>The LBRR frames are decoded and dropped, but they leave their mark: the channel's gain, NLSFs, filter and
+ *       pitch lag (not whether it was coded, whether the last frame was voiced, or any output), and the stereo
+ *       weights, which the real frame then overwrites.
+ *   <li>{@link #reset} forgets a channel only if it decoded a frame to the end. A side channel that decoded only its
+ *       parameters (in a stream output as mono, or as an LBRR frame) keeps them.
+ *   <li>The search for the largest LPC coefficient in the range limiting only looks at the first (see {@link
+ *       SilkLpcConverter}).
+ *   <li>A change of bandwidth is not a reset: the history, NLSFs and LPC coefficients of the other rate are read at the
+ *       new one, with stale entries beyond the new order. Only a CELT frame, or going from mono to stereo, resets.
+ *   <li>A stereo packet in a stream output as mono gives the mid channel without the side channel's prediction, and the
+ *       side channel's excitation is decoded, for the bits after it, but not synthesised.
+ *   <li>The mid-only flag is read only when the side channel's voice activity flag is inactive. In an LBRR frame the
+ *       mid channel's copy reads it unless the side channel has a copy too.
+ * </ul>
+ *
+ * <p>Not tested, as no fixture or FATE vector has one: a stereo packet in a stream whose header says mono. The LBRR
+ * frames of a stereo packet are in {@code silk-lbrr} and the changes of bandwidth in SILK-only stretches in FATE's
+ * {@code testvector12}.
  */
 final class SilkDecoder {
 

@@ -6,6 +6,9 @@ import lombok.experimental.UtilityClass;
  * The integer arithmetic of CELT's pulse vectors (RFC 6716 section 4.3.4): how many ways there are to place a number
  * of pulses in a number of dimensions, which of those ways an index names, the bits each pulse count costs, and the
  * fixed-point trigonometry that splits a band's bits between its halves.
+ *
+ * <p>The cosine of the angle keeps 16 bits at each step as FFmpeg's does. The index of a vector may need 32 bits, so
+ * it is a {@code long}.
  */
 @UtilityClass
 class CeltPulseUtils {

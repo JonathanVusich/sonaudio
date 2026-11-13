@@ -63,7 +63,8 @@ mavenPublishing {
 
     pom {
         name.set("sonaudio")
-        description.set("Hand-written FLAC and MP3 readers, a tag model and Chromaprint fingerprints for audio files")
+        description.set(
+            "Hand-written FLAC, MP3, ALAC and Opus readers, a tag model and Chromaprint fingerprints for audio files")
         url.set("https://github.com/JonathanVusich/sonaudio")
 
         licenses {

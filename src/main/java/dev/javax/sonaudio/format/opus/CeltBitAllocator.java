@@ -10,6 +10,9 @@ import java.util.Arrays;
  *
  * <p>What it works out per band stays in it until the next frame is allocated, as the energy and shape decoding of
  * the frame ask for it band by band.
+ *
+ * <p>As FFmpeg's final interpolation does, when the upper allocation vector is past the table's last row it trims the
+ * caps as well as the allocation, and the trim offset applies to every non-zero allocation, the caps included.
  */
 final class CeltBitAllocator {
 

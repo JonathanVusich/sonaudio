@@ -29,6 +29,10 @@ import java.util.NoSuchElementException;
  *
  * <p>A packet that FFmpeg's decoder rejects throws an {@link InvalidFormatException}. One whose elements leave a
  * channel out, which FFmpeg decodes to nothing and doesn't call an error, gives no frame.
+ *
+ * <p>When the file's edit list drops a first packet and starts partway into the next, one leftover start skip carries
+ * over from the dropped packet. This applies it, as FFmpeg decoding with one thread, and so {@code fpcalc}, does;
+ * FFmpeg's command line, with its default threads, loses it, since each thread keeps its own count.
  */
 public final class AlacDecoder implements IntPcmAudio {
 

@@ -42,6 +42,17 @@ import java.util.List;
  * <p>The page header and OpusHead are read through the bit reader. The pages themselves are read as bytes, as their
  * CRC covers all of them and a packet may continue across pages, and a packet is a byte array for the range decoder,
  * which reads raw bits from the end of a frame backwards.
+ *
+ * <p>The header is checked as FFmpeg's demuxer and decoder check it, but at parse time (FFmpeg fails at decoder open):
+ * at least 19 bytes, a major version of 0, a channel count other than 0, at most 2 channels for family 0 and 8 for
+ * family 1, {@code (n + 1)} squared channels, with 2 more for a stereo pair, for family 2, no more than 255 streams
+ * and coupled streams together, no more coupled streams than streams, and a mapping of 255 or a channel of a stream.
+ *
+ * <p>Where FFmpeg decodes a malformed or unusual file and this refuses: the pages are strict, as above; a chained
+ * file, which FFmpeg decodes as one stream with new headers, is an exception; so is a packet of code 3 with nothing
+ * after its TOC byte, which FFmpeg's demuxer reports as an error of its own; and the audio must start on a fresh page
+ * after {@code OpusTags}, as RFC 7845 says. A file with no granule position in its last 64 KB has a length of 0, where
+ * FFmpeg's is unknown.
  */
 public final class OpusParser implements Parser {
 

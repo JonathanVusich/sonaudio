@@ -8,6 +8,10 @@ import java.util.Arrays;
  * the last frame's parameters to this frame's, and the de-emphasis. It keeps what the next frame needs of this one:
  * the overlap, the history the post-filter looks back into, the post-filter's parameters and the de-emphasis
  * filter's memory.
+ *
+ * <p>The post-filter's cross-fade mixes doubles and floats as FFmpeg's C code does: the terms with {@code (1.0 - w) * g
+ * * x} are doubles and those of the new filter floats, added in the order of the C expression, and each sample is
+ * rounded to a float once.
  */
 final class CeltChannelSynthesis {
 

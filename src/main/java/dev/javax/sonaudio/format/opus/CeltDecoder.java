@@ -6,7 +6,7 @@ import java.util.Arrays;
 /**
  * The CELT layer of one coded stream (RFC 6716 section 4.3), which decodes a frame's CELT part to samples at 48 kHz.
  * Everything {@link OpusStream} does around it (the range decoder, the redundancy frames, the hybrid mix, the delay
- * that SILK's resampling puts on a hybrid frame, the mode switches) is written against the contract below.
+ * that SILK's resampling puts on a hybrid frame, the mode switches) is done there, and this decodes one frame.
  *
  * <p>FFmpeg's equivalent is {@code ff_celt_decode_frame} with {@code ff_celt_flush} ({@code dec_celt.c}), which
  * {@code dec.c} calls for each CELT-only or hybrid Opus frame, and also for the 5 ms redundancy frames. This decoder
@@ -18,6 +18,28 @@ import java.util.Arrays;
  * last frame's inverse MDCT, the post-filter's history and the previous frame's post-filter parameters, the
  * de-emphasis filter's memory, and the random generator's seed, which comes from the range decoder's state after each
  * frame.
+ *
+ * <p>Where FFmpeg does something that the RFC's decoder doesn't, or by its own arithmetic, this does it too:
+ *
+ * <ul>
+ *   <li>A silent frame still decodes everything, so that the range decoder's range at its end seeds the next frame's
+ *       noise; the coefficients and energies are replaced afterwards. The seed is that range at the end of every
+ *       frame, and 0 after a reset.
+ *   <li>The post-filter, silence and transient checks use the bits consumed, which is what the range decoder had
+ *       taken before the silence flag until the post-filter's parse updates it.
+ *   <li>Stereo output from a mono-coded frame decodes channel 1 from channel 0's coefficients with its own history.
+ *       Mono output from a stereo-coded frame adds the two channels' coefficients, halves them after the inverse MDCT,
+ *       and leaves channel 1's history alone.
+ *   <li>After each frame the de-emphasis memory is zeroed if it is subnormal or not finite.
+ *   <li>The phase inversion bit of stereo bands that have no angle is decoded and applied.
+ *   <li>There is no concealment of lost packets, as FFmpeg has none.
+ * </ul>
+ *
+ * <p>The output is within 1 at 16 bits of FFmpeg's, not bit for bit: the reference image's FFmpeg uses x86 SIMD for
+ * the post-filter, the de-emphasis and probably the FFTs, which round differently from its C code in 1 sample in
+ * several thousand, by 1. This is the C arithmetic (float and double mixed as the C does), so it is within 1 of both.
+ * The inverse MDCT is {@link CeltMdct}'s, not FFmpeg's split-radix code, so those differ at the level of float
+ * rounding too.
  */
 final class CeltDecoder {
 

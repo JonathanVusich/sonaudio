@@ -28,6 +28,14 @@ import java.util.NoSuchElementException;
  * position of 0, as far before this page's granule position as the packets that end on it are long. The packets of a
  * page that ends the stream are timed one after another from there instead, and the packet that carries the stream past
  * the page's granule position has the excess as its end trim.
+ *
+ * <p>Two of its results come from how FFmpeg times a stream. Only the packet that carries the stream past the last
+ * page's granule position gets an end trim, and the decoder applies one only when it is less than the samples the
+ * packet's frame has once the pre-skip is dropped: a trim of exactly that many drops the frame, and a narrowband
+ * packet whose frame is 24 samples short of its duration (see {@link OpusStream}) may not be trimmed at all. And when
+ * all the packets of a stream are on one page, which ends it, FFmpeg can't tell where the stream started from the
+ * granule position, so it times them from 0 and not from the granule position less their duration and the pre-skip;
+ * this does the same.
  */
 final class OggStream {
 

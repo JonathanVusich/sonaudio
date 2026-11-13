@@ -5,6 +5,9 @@ package dev.javax.sonaudio.format.opus;
  * inverse transform that FFmpeg's {@code libavutil/tx} gives for {@code n} coefficients: {@code n} samples, which are
  * the {@code n}-point DCT-IV of the coefficients in reverse order, scaled by -1/32768. It is computed through an FFT
  * of {@code n / 2} points.
+ *
+ * <p>It is not FFmpeg's split-radix and prime-factor code, so its results differ from FFmpeg's at the level of float
+ * rounding; the test checks the definition, in doubles.
  */
 final class CeltMdct {
 

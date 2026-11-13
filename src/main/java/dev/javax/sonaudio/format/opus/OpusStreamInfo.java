@@ -21,6 +21,10 @@ import java.util.List;
  *     implies: 0, then 1 for stereo.
  * @param sampleCount how many samples per channel the audio holds once the pre-skip is dropped, as the granule
  *     position of the file's last page gives it: 0 when no page has one
+ *
+ * <p>{@code sampleCount} is the last granule position less the pre-skip, which is what plays. FFmpeg's container
+ * duration is the granule position itself (ffprobe says 0.2465 s for a file of 0.24 s), so this is 312 samples (6.5 ms)
+ * shorter for the usual pre-skip.
  */
 public record OpusStreamInfo(
         int version,
