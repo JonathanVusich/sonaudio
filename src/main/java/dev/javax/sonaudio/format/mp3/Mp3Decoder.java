@@ -4,6 +4,7 @@ import dev.javax.bitstream.BitInputStream;
 import dev.javax.sonaudio.format.FloatPcmAudio;
 import dev.javax.sonaudio.format.FloatPcmFrame;
 import dev.javax.sonaudio.format.FrameContinuity;
+import dev.javax.sonaudio.internal.BoundedInputStream;
 import java.io.IOException;
 import java.nio.ByteOrder;
 import java.util.ArrayList;

@@ -1,4 +1,4 @@
-package dev.javax.sonaudio.format.mp3;
+package dev.javax.sonaudio.internal;
 
 import java.io.FilterInputStream;
 import java.io.IOException;
@@ -8,12 +8,12 @@ import java.io.InputStream;
  * A stream that ends after a number of bytes, and counts those read or skipped, which the decoder takes for its position
  * in the audio. Closing it leaves the stream it wraps open.
  */
-final class BoundedInputStream extends FilterInputStream {
+public final class BoundedInputStream extends FilterInputStream {
 
     private final long maxCount;
     private long count;
 
-    BoundedInputStream(final InputStream input, final long maxCount) {
+    public BoundedInputStream(final InputStream input, final long maxCount) {
         super(input);
         this.maxCount = maxCount;
     }
@@ -21,21 +21,21 @@ final class BoundedInputStream extends FilterInputStream {
     /**
      * @return how many bytes have been read or skipped
      */
-    long getCount() {
+    public long getCount() {
         return count;
     }
 
     /**
      * @return how many more bytes the stream gives before it ends
      */
-    long getRemaining() {
+    public long getRemaining() {
         return maxCount - count;
     }
 
     /**
      * Skips the bytes, or as many as the stream has left when it ends first, which a frame the file cuts short does.
      */
-    void skipAvailableBytes(final long length) throws IOException {
+    public void skipAvailableBytes(final long length) throws IOException {
         var remaining = length;
         while (remaining > 0) {
             final var skipped = skip(remaining);

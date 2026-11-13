@@ -1,4 +1,4 @@
-package dev.javax.sonaudio.format.flac;
+package dev.javax.sonaudio.internal;
 
 import lombok.experimental.UtilityClass;
 
@@ -6,14 +6,14 @@ import lombok.experimental.UtilityClass;
  * Builds the lookup tables of {@link Crc}.
  */
 @UtilityClass
-class CrcUtils {
+public class CrcUtils {
 
     /**
      * @param polynomial without its top bit
      * @param width from 8 to 32 bits
      * @return the CRC of each byte on its own, by byte
      */
-    static long[] crcTable(final long polynomial, final int width) {
+    public static long[] crcTable(final long polynomial, final int width) {
         final var mask = (1L << width) - 1;
         final var topBit = 1L << (width - 1);
         final var table = new long[256];

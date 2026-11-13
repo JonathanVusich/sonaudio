@@ -1,4 +1,4 @@
-package dev.javax.sonaudio.format.flac;
+package dev.javax.sonaudio.internal;
 
 import java.util.zip.Checksum;
 
@@ -7,7 +7,7 @@ import java.util.zip.Checksum;
  * use: CRC-8 (0x07) and CRC-16 (0x8005) in FLAC frames (RFC 9639 sections 9.1.8 and 9.3), CRC-16 (0x8005) in MP3
  * and AAC ADTS frames, and CRC-32 (0x04C11DB7) in Ogg pages. The JDK's {@code CRC32} is reflected, so it can't serve.
  */
-final class Crc implements Checksum {
+public final class Crc implements Checksum {
 
     private final int width;
     private final long mask;
@@ -18,7 +18,7 @@ final class Crc implements Checksum {
      * @param polynomial without its top bit
      * @param width from 8 to 32 bits
      */
-    Crc(final long polynomial, final int width) {
+    public Crc(final long polynomial, final int width) {
         this.width = width;
         this.mask = (1L << width) - 1;
         this.table = CrcUtils.crcTable(polynomial, width);

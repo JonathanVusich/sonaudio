@@ -2,6 +2,7 @@ package dev.javax.sonaudio.format.flac;
 
 import dev.javax.bitstream.BitOutputStream;
 import dev.javax.sonaudio.exception.InvalidFormatException;
+import dev.javax.sonaudio.internal.Crc;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;

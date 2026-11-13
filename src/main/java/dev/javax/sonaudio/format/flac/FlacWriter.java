@@ -6,6 +6,7 @@ import dev.javax.bitstream.BitOutputStream;
 import dev.javax.sonaudio.format.Format;
 import dev.javax.sonaudio.format.MD5Checksum;
 import dev.javax.sonaudio.format.Writer;
+import dev.javax.sonaudio.internal.VorbisTag;
 import dev.javax.sonaudio.metadata.RawMetadata;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -79,8 +80,8 @@ public final class FlacWriter implements Writer {
 
     private VorbisComment vorbisComment(final RawMetadata rawMetadata) {
         final var header = new BlockHeader(BlockPosition.LAST, BlockType.VORBIS_COMMENT, 0);
-        final var knownFields = Arrays.stream(FlacTag.values())
-                .flatMap(flacTag -> toFields(flacTag.getFieldName(), rawMetadata.findValues(flacTag.getTag())));
+        final var knownFields = Arrays.stream(VorbisTag.values())
+                .flatMap(vorbisTag -> toFields(vorbisTag.getFieldName(), rawMetadata.findValues(vorbisTag.getTag())));
         final var unknownFields = rawMetadata.unknownTags().flatMap(tagSet -> toFields(tagSet.tag(), tagSet.values()));
         return new VorbisComment(
                 header, VENDOR, Stream.concat(knownFields, unknownFields).toList());

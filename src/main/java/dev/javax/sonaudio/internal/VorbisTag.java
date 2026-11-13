@@ -1,4 +1,4 @@
-package dev.javax.sonaudio.format.flac;
+package dev.javax.sonaudio.internal;
 
 import dev.javax.sonaudio.metadata.Tag;
 import dev.javax.sonaudio.metadata.TagValue;
@@ -10,9 +10,12 @@ import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * The Vorbis comment fields sonaudio maps to a {@link Tag}, each by its name in lower case.
+ */
 @RequiredArgsConstructor
 @Getter
-enum FlacTag {
+public enum VorbisTag {
     ARTIST("artist", Tag.TRACK_ARTIST),
     ALBUM_ARTIST("albumartist", Tag.ALBUM_ARTIST),
     TITLE("title", Tag.TRACK_TITLE),
@@ -22,12 +25,16 @@ enum FlacTag {
     ORIGINAL_YEAR("originalyear", Tag.RELEASE_YEAR),
     COMPOSER("composer", Tag.COMPOSER);
 
-    private static final Map<String, FlacTag> TAGS = Arrays.stream(FlacTag.values())
-            .collect(Collectors.toUnmodifiableMap(FlacTag::getFieldName, Function.identity()));
+    private static final Map<String, VorbisTag> TAGS = Arrays.stream(VorbisTag.values())
+            .collect(Collectors.toUnmodifiableMap(VorbisTag::getFieldName, Function.identity()));
 
     private final String fieldName;
     private final Tag tag;
 
+    /**
+     * @param fieldValue the text of a field of this tag
+     * @return the value the text means
+     */
     public TagValue toTagValue(final String fieldValue) {
         return switch (this) {
             case ALBUM_ARTIST, TITLE, ALBUM, ARTIST, COMPOSER -> new TagValue.Str(fieldValue);
@@ -38,12 +45,13 @@ enum FlacTag {
 
     /**
      * @param fieldName a Vorbis comment field's name, in lower case
+     * @return the tag the name maps to, or the name when sonaudio has no tag for it
      */
-    static FieldTag fieldTag(final String fieldName) {
-        final var flacTag = TAGS.get(fieldName);
-        if (flacTag == null) {
-            return new FieldTag.Unknown(fieldName);
+    public static VorbisFieldTag fieldTag(final String fieldName) {
+        final var vorbisTag = TAGS.get(fieldName);
+        if (vorbisTag == null) {
+            return new VorbisFieldTag.Unknown(fieldName);
         }
-        return new FieldTag.Known(flacTag);
+        return new VorbisFieldTag.Known(vorbisTag);
     }
 }

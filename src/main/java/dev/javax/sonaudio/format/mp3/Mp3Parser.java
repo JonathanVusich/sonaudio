@@ -11,6 +11,7 @@ import dev.javax.sonaudio.format.mp3.Id3Frame.UniqueFileId;
 import dev.javax.sonaudio.format.mp3.Id3Frame.UserTextFrame;
 import dev.javax.sonaudio.format.mp3.ParsedHeader.HeaderFound;
 import dev.javax.sonaudio.format.mp3.ParsedHeader.NoHeader;
+import dev.javax.sonaudio.internal.BoundedInputStream;
 import dev.javax.sonaudio.metadata.RawMetadata;
 import dev.javax.sonaudio.metadata.RawMetadataBuilder;
 import java.io.BufferedInputStream;
