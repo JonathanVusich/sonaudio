@@ -235,10 +235,7 @@ final class CeltBitAllocator {
         skipStartBand = frame.startBand();
         for (var band = frame.startBand(); band < frame.endBand(); band++) {
             lowerBits[band] = trimmedStaticBits(frame, vectorBelow, band);
-            var upperBits = caps[band];
-            if (vectorAbove < VECTORS) {
-                upperBits = trimmedStaticBits(frame, vectorAbove, band);
-            }
+            var upperBits = trimmedStaticBits(frame, vectorAbove, band);
             if (vectorBelow != 0) {
                 lowerBits[band] += boosts[band];
             }
@@ -251,8 +248,13 @@ final class CeltBitAllocator {
         return vectorBelow;
     }
 
+    // The bits of a band at a static allocation vector, which is the band's cap for the vector above the last, after the
+    // trim, as FFmpeg trims the cap too.
     private int trimmedStaticBits(final CeltFrame frame, final int vector, final int band) {
-        final var bandBits = scaleToFrame(frame, CeltTables.BAND_WIDTH[band] * CeltTables.STATIC_ALLOC[vector][band]);
+        var bandBits = caps[band];
+        if (vector < VECTORS) {
+            bandBits = scaleToFrame(frame, CeltTables.BAND_WIDTH[band] * CeltTables.STATIC_ALLOC[vector][band]);
+        }
         if (bandBits == 0) {
             return 0;
         }
