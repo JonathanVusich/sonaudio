@@ -8,15 +8,17 @@ import java.util.Arrays;
 /**
  * One coded stream of an Opus file, decoded to 48 kHz as FFmpeg's {@code dec.c} decodes one ({@code
  * OpusStreamContext}). A stream is a mono or a stereo signal, which a multistream file has several of. The stream
- * drives the plug points: it starts the {@link RangeDecoder} on each frame, has {@link SilkDecoder} decode a SILK or
+ * drives the layers' decoders: it starts the {@link RangeDecoder} on each frame, has {@link SilkDecoder} decode a SILK or
  * hybrid frame's low band and {@link SilkResampler} bring it to 48 kHz, reads the redundancy flags that follow, has
  * {@link CeltDecoder} decode the CELT part and mixes it in, and fades a redundancy frame in or out. It keeps what has to
  * outlive a frame: the delay the resampling puts on SILK, which CELT's output waits for in a hybrid frame, the
- * redundancy fade still to finish, and the state of the plug points.
+ * redundancy fade still to finish, and the state of the decoders.
  *
- * <p>A frame of this decoder is NOT yet correct where it needs the plug points to decode real audio: the SILK, CELT
- * and resampler classes are stubs that write silence, so every sample is silence, though its count is right. The
- * redundancy frames, the hybrid mix and the fades are written, and run on that silence.
+ * <p>The resampler holds back the first samples of SILK's output until it has the 17 it needs to mirror the start, so
+ * the first frame of narrowband SILK comes out 24 samples short (at 48 kHz: 4 input samples of silence at 8 kHz), and
+ * none of the other bandwidths' do. The held-back samples are given before the next CELT frame, when SILK changes
+ * rate, or in a frame of their own after the last packet ({@link #drain}), as FFmpeg's drain does, with the previous
+ * frame's timestamp.
  *
  * <p>Where a frame can't be decoded, FFmpeg gives silence of the frame's length in its place, and so does this.
  */

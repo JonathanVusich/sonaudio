@@ -73,7 +73,6 @@ class OpusPacketFramingTest {
         assertThat(packet.mode()).isEqualTo(MODES[config]);
         assertThat(packet.bandwidth()).isEqualTo(BANDWIDTHS[config]);
         assertThat(packet.frameSamples()).isEqualTo(FRAME_SAMPLES[config]);
-        assertThat(packet.config()).isEqualTo(config);
     }
 
     @Test
@@ -90,7 +89,6 @@ class OpusPacketFramingTest {
         assertThat(packet.frameOffset(0)).isEqualTo(1);
         assertThat(packet.frameSize(0)).isEqualTo(4);
         assertThat(packet.packetSize()).isEqualTo(5);
-        assertThat(packet.dataSize()).isEqualTo(5);
         assertThat(packet.sampleCount()).isEqualTo(960);
         assertThat(packet.frameMillis()).isEqualTo(20);
     }
@@ -172,7 +170,6 @@ class OpusPacketFramingTest {
         assertThat(packet.frameCount()).isEqualTo(1);
         assertThat(packet.frameSize(0)).isEqualTo(5);
         assertThat(packet.packetSize()).isEqualTo(11);
-        assertThat(packet.dataSize()).isEqualTo(8);
     }
 
     @Test
@@ -187,7 +184,7 @@ class OpusPacketFramingTest {
         final var packet = framing(bytes);
 
         assertThat(packet.frameSize(0)).isEqualTo(5);
-        assertThat(packet.dataSize()).isEqualTo(bytes.length - 256);
+        assertThat(packet.packetSize()).isEqualTo(bytes.length);
     }
 
     @Test

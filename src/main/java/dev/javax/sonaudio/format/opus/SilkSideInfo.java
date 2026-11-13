@@ -7,7 +7,6 @@ package dev.javax.sonaudio.format.opus;
 final class SilkSideInfo {
 
     private final SilkSignalType signalType;
-    private final QuantizationOffset quantizationOffset;
     private final float[] gains;
     private final SilkLpc lpc;
     private final int[] pitchLags;
@@ -23,14 +22,12 @@ final class SilkSideInfo {
      */
     SilkSideInfo(
             final SilkSignalType signalType,
-            final QuantizationOffset quantizationOffset,
             final float[] gains,
             final SilkLpc lpc,
             final int[] pitchLags,
             final float[][] ltpTaps,
             final float ltpScale) {
         this.signalType = signalType;
-        this.quantizationOffset = quantizationOffset;
         this.gains = gains;
         this.lpc = lpc;
         this.pitchLags = pitchLags;
@@ -40,10 +37,6 @@ final class SilkSideInfo {
 
     SilkSignalType signalType() {
         return signalType;
-    }
-
-    QuantizationOffset quantizationOffset() {
-        return quantizationOffset;
     }
 
     SilkLpc lpc() {

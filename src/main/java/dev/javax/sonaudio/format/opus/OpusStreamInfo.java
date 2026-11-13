@@ -47,7 +47,6 @@ public record OpusStreamInfo(
         {0, 2, 1, 6, 5, 3, 4},
         {0, 2, 1, 7, 5, 6, 3, 4}
     };
-    private static final double Q8_DIVISOR = 256.0;
 
     @Override
     public int[] channelMapping() {
@@ -62,13 +61,6 @@ public record OpusStreamInfo(
         final var seconds = sampleCount / OPUS_SAMPLE_RATE;
         final var nanos = sampleCount % OPUS_SAMPLE_RATE * 1_000_000_000L / OPUS_SAMPLE_RATE;
         return Duration.ofSeconds(seconds, nanos);
-    }
-
-    /**
-     * @return {@link #outputGain} in decibels
-     */
-    public double outputGainDecibels() {
-        return outputGain / Q8_DIVISOR;
     }
 
     /**

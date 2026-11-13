@@ -71,7 +71,6 @@ class OpusParserTest {
         final var info = parser.parse(OpusSample.OUTPUT_GAIN.channel()).audio().streamInfo();
 
         assertThat(info.outputGain()).isEqualTo(-768);
-        assertThat(info.outputGainDecibels()).isEqualTo(-3.0);
         assertThat(info.preSkip()).isEqualTo(312);
         assertThat(info.inputSampleRate()).isEqualTo(SAMPLE_RATE);
         assertThat(info.channelCount()).isEqualTo(1);

@@ -485,15 +485,7 @@ public final class OpusParser implements Parser {
             coding = ChannelCoding.STEREO;
         }
         return new OpusPacket(
-                mode(config),
-                bandwidth(config),
-                coding,
-                config,
-                frameSamples,
-                layout.offsets(),
-                layout.sizes(),
-                layout.end(),
-                layout.end() - layout.padding());
+                mode(config), bandwidth(config), coding, frameSamples, layout.offsets(), layout.sizes(), layout.end());
     }
 
     private OpusMode mode(final int config) {
@@ -535,7 +527,7 @@ public final class OpusParser implements Parser {
         }
         final var start = position(input, length);
         requireFrameSize(end - start);
-        return new FrameLayout(new int[] {start}, new int[] {end - start}, end, 0);
+        return new FrameLayout(new int[] {start}, new int[] {end - start}, end);
     }
 
     private FrameLayout twoEqualFrames(final ByteArrayInputStream input, final int length, final Delimiting delimiting)
@@ -552,7 +544,7 @@ public final class OpusParser implements Parser {
             throw new InvalidFormatException("Opus packet of code 1 has frames of different sizes");
         }
         requireFrameSize(bytes / 2);
-        return new FrameLayout(new int[] {start, start + bytes / 2}, new int[] {bytes / 2, bytes / 2}, end, 0);
+        return new FrameLayout(new int[] {start, start + bytes / 2}, new int[] {bytes / 2, bytes / 2}, end);
     }
 
     private FrameLayout twoDifferentFrames(
@@ -571,7 +563,7 @@ public final class OpusParser implements Parser {
             throw new InvalidFormatException("Opus packet's first frame is larger than the packet");
         }
         requireFrameSize(secondSize);
-        return new FrameLayout(new int[] {start, start + firstSize}, new int[] {firstSize, secondSize}, end, 0);
+        return new FrameLayout(new int[] {start, start + firstSize}, new int[] {firstSize, secondSize}, end);
     }
 
     private FrameLayout arbitraryFrames(final ByteArrayInputStream input, final int length, final Delimiting delimiting)
@@ -616,7 +608,7 @@ public final class OpusParser implements Parser {
             throw new InvalidFormatException("Opus packet's frames are larger than the packet");
         }
         sizes[frameCount - 1] = frameBytes - codedBytes;
-        return new FrameLayout(consecutiveOffsets(start, sizes), sizes, end, padding);
+        return new FrameLayout(consecutiveOffsets(start, sizes), sizes, end);
     }
 
     private FrameLayout constantFrames(
@@ -642,7 +634,7 @@ public final class OpusParser implements Parser {
         }
         final var sizes = new int[frameCount];
         Arrays.fill(sizes, frameBytes);
-        return new FrameLayout(consecutiveOffsets(position(input, length), sizes), sizes, end, padding);
+        return new FrameLayout(consecutiveOffsets(position(input, length), sizes), sizes, end);
     }
 
     private int[] consecutiveOffsets(final int start, final int[] sizes) {
@@ -707,5 +699,5 @@ public final class OpusParser implements Parser {
 
     private record PageHeader(int flags, long granule, int serial, int sequence, long crc, int segmentCount) {}
 
-    private record FrameLayout(int[] offsets, int[] sizes, int end, int padding) {}
+    private record FrameLayout(int[] offsets, int[] sizes, int end) {}
 }

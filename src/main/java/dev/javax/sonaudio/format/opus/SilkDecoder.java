@@ -382,7 +382,6 @@ final class SilkDecoder {
             final SilkLayout layout, final FrameType frameType, final float[] gains, final SilkLpc lpc) {
         return new SilkSideInfo(
                 frameType.signalType(),
-                frameType.offset(),
                 gains,
                 lpc,
                 new int[layout.subframes()],
@@ -403,7 +402,7 @@ final class SilkDecoder {
         final var pitchLags = readPitchLags(rangeDecoder, layout, primaryLag);
         final var ltpTaps = readLtpTaps(rangeDecoder, layout);
         final var ltpScale = readLtpScale(rangeDecoder, frame);
-        return new SilkSideInfo(frameType.signalType(), frameType.offset(), gains, lpc, pitchLags, ltpTaps, ltpScale);
+        return new SilkSideInfo(frameType.signalType(), gains, lpc, pitchLags, ltpTaps, ltpScale);
     }
 
     // The primary pitch lag, as a change from the last frame's if that was voiced and this isn't the first frame of the

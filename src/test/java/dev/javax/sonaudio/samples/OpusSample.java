@@ -30,17 +30,18 @@ import org.apache.commons.compress.utils.SeekableInMemoryByteChannel;
  * frame's channels interleaved, gzipped. They start after the pre-skip, end where the Ogg granule position ends the
  * stream (11520 samples), and have the OpusHead output gain applied. FFmpeg's channel order is the file's, which for
  * mapping family 1 is Vorbis's mapped to FFmpeg's. There are no f32le references: they would double the size of the
- * fixtures, which are already about 3 MB with the rest. For the narrowband files, FFmpeg's decoder emits 24 more samples
- * at the end of the stream with the previous frame's timestamp, which the ffmpeg command drops, so the reference stops at
- * 11520.
+ * fixtures, which are already about 3 MB with the rest. The first frame of a narrowband SILK stream comes out 24
+ * samples short, because the resampler holds them back, and a frame of those 24 follows the last packet (FFmpeg's
+ * drain, which has the previous frame's timestamp), so a narrowband file still has 11520 samples in all.
  */
 public enum OpusSample {
     // SILK-only, from voice at -application voip with -cutoff 4000, 6000 and 8000, at 20 ms. Mono at -b:a 10k, 12k and
-    // 16k, stereo at 16k, 20k and 24k. -frame_duration 20.
+    // 16k, stereo at 16k, 20k and 24k. -frame_duration 20. Only the medium and wideband stereo files have stereo
+    // packets (their TOC bytes say so); the narrowband one's say mono, as libopus coded it as mono.
     SILK_NB_MONO_20MS,
     SILK_MB_MONO_20MS,
     SILK_WB_MONO_20MS,
-    // Narrowband stereo (two channels in the header), but libopus coded it as mono: its TOC bytes say mono.
+    // Two channels in the header, but mono packets (see above).
     SILK_NB_STEREO_20MS,
     SILK_MB_STEREO_20MS,
     SILK_WB_STEREO_20MS,
@@ -95,8 +96,9 @@ public enum OpusSample {
     // without re-encoding: -c copy -bsf:a opus_metadata=gain=-768. Its reference is decoded with that gain applied.
     OUTPUT_GAIN,
     // 5.1 from voice (six channels, FFmpeg's "5.1" layout), -application audio -b:a 160k -mapping_family 1: 4 streams,
-    // 2 of them coupled, with the channel mapping [0, 4, 1, 2, 3, 5]; its 11 packets are CELT fullband 20 ms, whose TOC
-    // bytes say stereo (the first stream's). The reference has the channels in FFmpeg's order.
+    // 2 of them coupled, with the channel mapping [0, 4, 1, 2, 3, 5]; its 11 packets are fullband 20 ms. The TOC bytes
+    // of the first stream say CELT stereo, but those of the third stream (the centre channel) say hybrid, so the file
+    // needs the SILK layer too. The reference has the channels in FFmpeg's order.
     SURROUND51,
     // SILK_WB_MONO_20MS remuxed (-c copy) and tagged by reference/tag-fixtures.py (mutagen) the way MusicBrainz Picard
     // writes Vorbis comments: TITLE, ARTIST, ALBUMARTIST, ALBUM, TRACKNUMBER=3, TOTALTRACKS=12, DISCNUMBER=1,

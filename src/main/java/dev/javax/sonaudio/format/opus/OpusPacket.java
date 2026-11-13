@@ -9,41 +9,33 @@ final class OpusPacket {
     private final OpusMode mode;
     private final OpusBandwidth bandwidth;
     private final ChannelCoding coding;
-    private final int config;
     private final int frameSamples;
     private final int[] frameOffsets;
     private final int[] frameSizes;
     private final int packetSize;
-    private final int dataSize;
 
     /**
-     * @param config the TOC byte's configuration number, 0 to 31
      * @param frameSamples how many samples at 48 kHz each frame holds, per channel
      * @param frameOffsets where each frame starts, from the start of this stream's part of the packet, which the
      *     packet keeps: the caller makes it for the packet and doesn't touch it again
      * @param frameSizes how many bytes each frame takes, which the packet keeps in the same way
      * @param packetSize how many bytes this stream's part of the packet takes, so where the next stream's starts
-     * @param dataSize how many of those bytes are not padding
      */
     OpusPacket(
             final OpusMode mode,
             final OpusBandwidth bandwidth,
             final ChannelCoding coding,
-            final int config,
             final int frameSamples,
             final int[] frameOffsets,
             final int[] frameSizes,
-            final int packetSize,
-            final int dataSize) {
+            final int packetSize) {
         this.mode = mode;
         this.bandwidth = bandwidth;
         this.coding = coding;
-        this.config = config;
         this.frameSamples = frameSamples;
         this.frameOffsets = frameOffsets;
         this.frameSizes = frameSizes;
         this.packetSize = packetSize;
-        this.dataSize = dataSize;
     }
 
     OpusMode mode() {
@@ -56,13 +48,6 @@ final class OpusPacket {
 
     ChannelCoding coding() {
         return coding;
-    }
-
-    /**
-     * @return the TOC byte's configuration number, 0 to 31
-     */
-    int config() {
-        return config;
     }
 
     /**
@@ -112,12 +97,5 @@ final class OpusPacket {
      */
     int packetSize() {
         return packetSize;
-    }
-
-    /**
-     * @return how many of its bytes are not padding
-     */
-    int dataSize() {
-        return dataSize;
     }
 }

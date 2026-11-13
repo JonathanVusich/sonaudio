@@ -106,18 +106,10 @@ class SilkSynthesisTest {
     }
 
     private SilkSideInfo unvoiced(final float[] gains, final SilkLpc lpc) {
-        return new SilkSideInfo(
-                SilkSignalType.UNVOICED, QuantizationOffset.LOW, gains, lpc, new int[2], new float[2][LTP_TAPS], 1.0f);
+        return new SilkSideInfo(SilkSignalType.UNVOICED, gains, lpc, new int[2], new float[2][LTP_TAPS], 1.0f);
     }
 
     private SilkSideInfo voiced(final int[] pitchLags, final float[][] taps) {
-        return new SilkSideInfo(
-                SilkSignalType.VOICED,
-                QuantizationOffset.LOW,
-                new float[] {1.0f, 1.0f},
-                silentFilter(),
-                pitchLags,
-                taps,
-                1.0f);
+        return new SilkSideInfo(SilkSignalType.VOICED, new float[] {1.0f, 1.0f}, silentFilter(), pitchLags, taps, 1.0f);
     }
 }
