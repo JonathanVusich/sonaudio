@@ -13,7 +13,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -52,13 +51,11 @@ class OpusCeltParityTest {
         }
     }
 
-    // Disabled until SILK decodes: its centre channel (the third stream) is hybrid, though the OpusSample comment and
-    // the
-    // TOC byte of its first stream say CELT-only. Measured with CELT alone: max error 16594 and 9598 samples beyond 1,
-    // all
-    // on channel 2 (FFmpeg's debug output shows start band 17 and SILK bits consumed for that stream); the other five
-    // channels are within 1. With SILK merged (alac-opus c559406) all six are within 1.
-    @Disabled("The centre channel is a hybrid stream, which needs the SILK layer")
+    // Its centre channel (the third stream) is hybrid, though the OpusSample comment and the TOC byte of its first
+    // stream
+    // say CELT-only, so this needs the SILK layer too. With CELT alone it measured: max error 16594 and 9598 samples
+    // beyond 1, all on channel 2 (FFmpeg's debug output shows start band 17 for that stream); the other channels were
+    // within 1.
     @Test
     void decodesTheSurroundFixtureLikeFfmpeg() throws IOException, InvalidFormatException {
         final var reference = OpusSample.SURROUND51.referencePcm().readAllBytes();
