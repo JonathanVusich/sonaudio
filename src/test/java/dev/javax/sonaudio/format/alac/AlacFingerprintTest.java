@@ -51,9 +51,11 @@ class AlacFingerprintTest {
     }
 
     // The file's edit list starts in the middle of its second packet, which drops the first. FFmpeg's command line,
-    // which decodes with several threads, then keeps 1904 samples it should have skipped, but libavcodec does not when
-    // it decodes in one thread, as fpcalc does. This is fpcalc's fingerprint of the bytes that this builds: the same
-    // as that of ffmpeg -threads 1's output, and not as that of its output with its default threads.
+    // which decodes with several threads, then loses the 1904 samples of the second packet that it should skip, so its
+    // output starts 1904 samples earlier in the audio (and has as many samples, as the edit's duration ends it).
+    // libavcodec does not lose them when it decodes in one thread, as fpcalc does. This is fpcalc's fingerprint of the
+    // bytes that this builds, made from the chords sample with the same edit list: the same as that of ffmpeg -threads
+    // 1's output, and not as that of its output with its default threads.
     @Test
     void fingerprintsAFileWhoseEditListDropsItsFirstPacketAsFpcalcDoes() throws IOException, InvalidFormatException {
         final var sample = FingerprintAudioSample.ALAC_CHORDS_8000HZ_MONO;

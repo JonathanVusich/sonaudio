@@ -74,6 +74,7 @@ public final class OpusParser implements Parser {
     private static final long OGG_CRC_POLYNOMIAL = 0x04C11DB7L;
     private static final int CRC_WIDTH = 32;
     private static final int OPUS_HEAD_SIZE = 19;
+    private static final int MAPPING_TABLE_OFFSET = 21;
     private static final int MAJOR_VERSION_MASK = 0xF0;
     private static final int UNMAPPED_CHANNEL = 255;
     private static final int MAX_VORBIS_ORDER_CHANNELS = 8;
@@ -376,11 +377,7 @@ public final class OpusParser implements Parser {
                 channelCount - 1,
                 new int[] {0, 1},
                 0);
-        try {
-            return readChannelMapping(fields, head);
-        } catch (final EOFException cutShort) {
-            throw new InvalidFormatException("OpusHead's channel mapping table is cut short!");
-        }
+        return readChannelMapping(packet.length, fields, head);
     }
 
     private ChannelMappingFamily mappingFamily(final int family) throws InvalidFormatException {
@@ -394,7 +391,8 @@ public final class OpusParser implements Parser {
     }
 
     // Family 0 has no table in its header, so the info already holds the one it implies.
-    private OpusStreamInfo readChannelMapping(final BitInputStream fields, final OpusStreamInfo head)
+    private OpusStreamInfo readChannelMapping(
+            final int packetLength, final BitInputStream fields, final OpusStreamInfo head)
             throws IOException, InvalidFormatException {
         if (head.mappingFamily() == ChannelMappingFamily.SINGLE_STREAM) {
             if (head.channelCount() > 2) {
@@ -403,6 +401,9 @@ public final class OpusParser implements Parser {
             return head;
         }
         final var channelCount = head.channelCount();
+        if (packetLength < MAPPING_TABLE_OFFSET + channelCount) {
+            throw new InvalidFormatException("OpusHead's channel mapping table is cut short!");
+        }
         final var streams = (int) fields.readBits(Byte.SIZE);
         final var coupled = (int) fields.readBits(Byte.SIZE);
         final var mapping = new int[channelCount];

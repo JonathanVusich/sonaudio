@@ -36,8 +36,9 @@ import java.util.Arrays;
  * </ul>
  *
  * <p>The output is within 1 at 16 bits of FFmpeg's, not bit for bit: the reference image's FFmpeg uses x86 SIMD for
- * the post-filter, the de-emphasis and probably the FFTs, which round differently from its C code in 1 sample in
- * several thousand, by 1. This is the C arithmetic (float and double mixed as the C does), so it is within 1 of both.
+ * the post-filter, the de-emphasis and probably the FFTs, which round differently from its C code by 1 in a few
+ * hundred samples of several million (see {@link OpusDecoder}). This is the C arithmetic (float and double mixed as the C
+ * does), so it is within 1 of both.
  * The inverse MDCT is {@link CeltMdct}'s, not FFmpeg's split-radix code, so those differ at the level of float
  * rounding too.
  */

@@ -19,7 +19,9 @@ class SignalUtils {
     private static final double CENTRE = 1;
     private static final double OTHER = 0.5;
     private static final double SILENT = 0;
-    // For three to eight channels: front left and right, centre, low-frequency, back, side, in Vorbis's orders.
+    // For three to eight channels: front left and right, centre, low-frequency, back, side, in the order FFmpeg gives
+    // the
+    // channels of Opus's layouts.
     private static final double[][] VORBIS_LAYOUT_WEIGHTS = {
         {FRONT, FRONT, CENTRE},
         {FRONT, FRONT, OTHER, OTHER},

@@ -31,7 +31,8 @@ import java.util.NoSuchElementException;
  * <p>Its samples match FFmpeg's within 1 at 16 bits on the FATE vectors and on the fixtures, and in the number of
  * samples exactly. They are not bit for bit, because FFmpeg's own result depends on the machine: its x86 SIMD
  * post-filter and de-emphasis, and probably its FFTs, round differently from its C code by 1 least significant bit in
- * about one sample in ten thousand (the reference image's FFmpeg and its {@code -cpuflags 0} output differ so), and this
+ * a few hundred samples of several million (the reference image's FFmpeg and its {@code -cpuflags 0} output differ so:
+ * 345 of 2830080 in testvector01, 530 of 2881920 in testvector11, 1 to 11 in each fixture), and this
  * decoder does the C arithmetic, in the same order and precision.
  *
  * <p>What it reproduces of FFmpeg, where the RFC and libopus do otherwise:

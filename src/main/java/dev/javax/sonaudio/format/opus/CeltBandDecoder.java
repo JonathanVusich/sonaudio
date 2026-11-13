@@ -25,7 +25,6 @@ final class CeltBandDecoder {
     private static final int SIGN_EIGHTHS = 8;
     private static final int NOISE_BIT = 0x8000;
     private static final float FOLD_NOISE_LEVEL = 1.0f / 256;
-    private static final double SQUARE_ROOT_OF_HALF = 0.70710678118654752440;
 
     /**
      * Whether the band that folding starts from may move up to the band just decoded: it may when that band had more
@@ -65,11 +64,6 @@ final class CeltBandDecoder {
     private int foldBin;
     private int foldFirstMask;
     private int foldSecondMask;
-    // What carries from one band of the frame to the next.
-    private CeltStereoMode dualStereo;
-    private int lowbandOffset;
-    private int balance;
-    private FoldUpdate foldUpdate;
 
     /**
      * @param noise the generator that fills bands without pulses, which the frame's anti-collapse uses as well
@@ -114,9 +108,25 @@ final class CeltBandDecoder {
             final CeltBitAllocator bits,
             final int[] changes) {
         beginFrame(decoder, codedFrame, allocation, changes);
+        var dualStereo = allocation.dualStereo();
+        var lowbandOffset = 0;
+        var balance = allocation.remainingBits();
+        var foldUpdate = FoldUpdate.ALLOWED;
         final var totalBits = (codedFrame.frameBits() << 3) - allocation.anticollapseReserve();
         for (var band = codedFrame.startBand(); band < codedFrame.endBand(); band++) {
-            decodeNextBand(band, totalBits, allocation, bits);
+            final var consumed = decoder.tellFraction();
+            if (band != codedFrame.startBand()) {
+                balance -= consumed;
+            }
+            eighthsLeft = totalBits - consumed - 1;
+            final var bandBits = bandBits(allocation, bits, band, balance);
+            lowbandOffset = nextLowbandOffset(band, lowbandOffset, foldUpdate);
+            copyHybridFold(band);
+            dualStereo = joinStereoAtIntensityBand(band, dualStereo);
+            findFoldSource(band, lowbandOffset);
+            decodeChannels(band, bandBits, dualStereo);
+            balance += bits.pulses(band) + consumed;
+            foldUpdate = foldUpdateAfter(band, bandBits);
         }
     }
 
@@ -134,30 +144,10 @@ final class CeltBandDecoder {
             Arrays.fill(coefficients[channel], 0, codedFrame.frameSamples(), 0f);
             Arrays.fill(collapseMasks[channel], 0);
         }
-        dualStereo = allocation.dualStereo();
-        lowbandOffset = 0;
-        balance = allocation.remainingBits();
-        foldUpdate = FoldUpdate.ALLOWED;
     }
 
-    private void decodeNextBand(
-            final int band, final int totalBits, final CeltAllocation allocation, final CeltBitAllocator bits) {
-        final var consumed = rangeDecoder.tellFraction();
-        if (band != frame.startBand()) {
-            balance -= consumed;
-        }
-        eighthsLeft = totalBits - consumed - 1;
-        final var bandBits = bandBits(allocation, bits, band);
-        lowbandOffset = nextLowbandOffset(band);
-        copyHybridFold(band);
-        joinStereoAtIntensityBand(band);
-        findFoldSource(band);
-        decodeChannels(band, bandBits);
-        balance += bits.pulses(band) + consumed;
-        foldUpdate = foldUpdateAfter(band, bandBits);
-    }
-
-    private int bandBits(final CeltAllocation allocation, final CeltBitAllocator bits, final int band) {
+    private int bandBits(
+            final CeltAllocation allocation, final CeltBitAllocator bits, final int band, final int balance) {
         if (band > allocation.codedBands() - 1) {
             return 0;
         }
@@ -167,7 +157,7 @@ final class CeltBandDecoder {
     }
 
     // The band that folding starts from moves up while there is room to fold from below it.
-    private int nextLowbandOffset(final int band) {
+    private int nextLowbandOffset(final int band, final int lowbandOffset, final FoldUpdate foldUpdate) {
         final var start = frame.startBand();
         final var roomBelow = CeltTables.BAND_START[band] - CeltTables.BAND_WIDTH[band] >= CeltTables.BAND_START[start];
         if ((roomBelow || band == start + 1) && (foldUpdate == FoldUpdate.ALLOWED || lowbandOffset == 0)) {
@@ -189,11 +179,12 @@ final class CeltBandDecoder {
     }
 
     // From the intensity band up, the channels are coded jointly, and what is folded is the average of the two.
-    private void joinStereoAtIntensityBand(final int band) {
+    private CeltStereoMode joinStereoAtIntensityBand(final int band, final CeltStereoMode dualStereo) {
         if (dualStereo == CeltStereoMode.DUAL && band == intensityBand) {
-            dualStereo = CeltStereoMode.JOINT;
             averageFoldedChannels(band);
+            return CeltStereoMode.JOINT;
         }
+        return dualStereo;
     }
 
     private void averageFoldedChannels(final int band) {
@@ -211,7 +202,7 @@ final class CeltBandDecoder {
 
     // Finds the lower band that a band folds from, and which of the blocks below it have content, so that the band's
     // blocks that have none are not folded as if they had.
-    private void findFoldSource(final int band) {
+    private void findFoldSource(final int band, final int lowbandOffset) {
         fold = Fold.ABSENT;
         final var covers = spread != CeltSpread.AGGRESSIVE || frame.blocks() > 1 || timeFrequencyChanges[band] < 0;
         if (lowbandOffset == 0 || !covers) {
@@ -220,10 +211,10 @@ final class CeltBandDecoder {
         fold = Fold.AVAILABLE;
         final var width = CeltTables.BAND_WIDTH[band];
         foldBin = Math.max(CeltTables.BAND_START[frame.startBand()], CeltTables.BAND_START[lowbandOffset] - width);
-        collectFoldMasks(foldStartBand(), foldEndBand(band, width));
+        collectFoldMasks(foldStartBand(lowbandOffset), foldEndBand(band, width, lowbandOffset));
     }
 
-    private int foldStartBand() {
+    private int foldStartBand(final int lowbandOffset) {
         var foldStart = lowbandOffset;
         do {
             foldStart--;
@@ -231,7 +222,7 @@ final class CeltBandDecoder {
         return foldStart;
     }
 
-    private int foldEndBand(final int band, final int width) {
+    private int foldEndBand(final int band, final int width, final int lowbandOffset) {
         var foldEnd = lowbandOffset - 1;
         do {
             foldEnd++;
@@ -248,7 +239,7 @@ final class CeltBandDecoder {
         }
     }
 
-    private void decodeChannels(final int band, final int bandBits) {
+    private void decodeChannels(final int band, final int bandBits, final CeltStereoMode dualStereo) {
         final var firstFill = startingFill(foldFirstMask);
         final var secondFill = startingFill(foldSecondMask);
         if (dualStereo == CeltStereoMode.DUAL) {

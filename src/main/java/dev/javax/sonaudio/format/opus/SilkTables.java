@@ -86,7 +86,8 @@ final class SilkTables {
         {10, 11, 13, 11, 12, 11, 11, 11, 10, 9, 10, 14, 12, 8, 8, 8}
     };
 
-    // The two sets of narrowband and mediumband prediction weights for the stage-2 residual's backward prediction
+    // The two sets of narrowband and mediumband prediction weights, in Q8, for the stage-2 residual's backward
+    // prediction
     // (section 4.2.7.5.2).
     static final int[][] LSF_PRED_WEIGHTS_NBMB = {
         {179, 138, 140, 148, 151, 149, 153, 151, 163},
@@ -422,7 +423,9 @@ final class SilkTables {
         {2, 0, 9, 10, 88}
     };
 
-    // The Q9 weights of the narrowband and mediumband stage-2 residuals, by stage-1 index (section 4.2.7.5.3).
+    // The Q9 weights of the narrowband and mediumband stage-2 residuals by stage-1 index, which the RFC works out from
+    // the
+    // codebook and says may be precomputed (section 4.2.7.5.3).
     static final int[][] LSF_WEIGHT_NBMB = {
         {2897, 2314, 2314, 2314, 2287, 2287, 2314, 2300, 2327, 2287},
         {2888, 2580, 2394, 2367, 2314, 2274, 2274, 2274, 2274, 2194},
@@ -505,7 +508,7 @@ final class SilkTables {
         {10, 20}
     };
 
-    // The Q10 quantization offsets of the excitation, by signal type and offset type (section 4.2.7.8.6).
+    // The Q23 quantization offsets of the excitation, by signal type and offset type (section 4.2.7.8.6).
     static final int[][] QUANT_OFFSET = {
         {25, 60},
         {8, 25}

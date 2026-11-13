@@ -74,7 +74,9 @@ final class RangeDecoder {
 
     /**
      * Cuts the last bytes off the frame, as the size of a redundancy frame at the end of it does once that is known:
-     * what is read from the end and from past it is then relative to the new end.
+     * what is read from the end and from past it is then relative to the new end. FFmpeg instead starts its raw bit
+     * reader again at the new end, which is the same for a valid stream; for a redundancy size that the frame is too
+     * short for, the two are not compared.
      *
      * @param newSize how many bytes the frame keeps, from its start
      */

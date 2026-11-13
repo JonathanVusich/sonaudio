@@ -26,7 +26,7 @@ import org.junit.jupiter.params.provider.EnumSource;
  * {@link FateSamples#STDDEV_FUZZ} of the vector's target.
  *
  * <p>The files cover mono and stereo packets of every mode and bandwidth in stereo streams, mono packets in mono
- * streams, LBRR in a stereo SILK packet ({@code silk-lbrr}) and changes of bandwidth between consecutive SILK-only
+ * streams, LBRR in the SILK layer of stereo hybrid packets ({@code silk-lbrr}) and changes of bandwidth between consecutive SILK-only
  * packets ({@code testvector12}). They don't cover a stereo-coded packet in a stream whose header says mono: no
  * encoder here writes one, and a bitstream made by hand wouldn't be a check against FFmpeg.
  */
