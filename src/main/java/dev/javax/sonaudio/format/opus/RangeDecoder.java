@@ -115,6 +115,13 @@ final class RangeDecoder {
     }
 
     /**
+     * @return the width of the range now, 32 bits wide at most, which CELT seeds its noise with after each frame
+     */
+    int range() {
+        return (int) range;
+    }
+
+    /**
      * Counts the rest of the frame as used, as CELT does for a silent frame, which codes nothing more.
      */
     void consumeToEnd() {
