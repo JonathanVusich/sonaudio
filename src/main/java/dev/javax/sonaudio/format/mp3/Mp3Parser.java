@@ -12,6 +12,7 @@ import dev.javax.sonaudio.format.mp3.Id3Frame.UserTextFrame;
 import dev.javax.sonaudio.format.mp3.ParsedHeader.HeaderFound;
 import dev.javax.sonaudio.format.mp3.ParsedHeader.NoHeader;
 import dev.javax.sonaudio.internal.BoundedInputStream;
+import dev.javax.sonaudio.internal.PicardNames;
 import dev.javax.sonaudio.metadata.RawMetadata;
 import dev.javax.sonaudio.metadata.RawMetadataBuilder;
 import java.io.BufferedInputStream;
@@ -28,7 +29,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.zip.InflaterInputStream;
 import java.util.zip.ZipException;
@@ -52,19 +52,6 @@ public final class Mp3Parser implements Parser {
     // How much of a file FFmpeg reads to find its streams.
     private static final int PROBE_SIZE = 5_000_000;
 
-    // Picard's TXXX descriptions, and the names it gives the same tags in Vorbis comments, so unknown tags have the
-    // same names whether they were read from an MP3 or a FLAC file.
-    private static final Map<String, String> PICARD_USER_TEXT = Map.of(
-            "MusicBrainz Artist Id", "musicbrainz_artistid",
-            "MusicBrainz Album Id", "musicbrainz_albumid",
-            "MusicBrainz Album Artist Id", "musicbrainz_albumartistid",
-            "MusicBrainz Release Group Id", "musicbrainz_releasegroupid",
-            "MusicBrainz Release Track Id", "musicbrainz_releasetrackid",
-            "MusicBrainz Work Id", "musicbrainz_workid",
-            "MusicBrainz Disc Id", "musicbrainz_discid",
-            "MusicBrainz Album Type", "releasetype",
-            "MusicBrainz Album Status", "releasestatus",
-            "MusicBrainz Album Release Country", "releasecountry");
     // Picard keeps the recording's MBID in a UFID frame of this owner, and calls it MUSICBRAINZ_TRACKID in FLAC.
     private static final String MUSICBRAINZ_OWNER = "http://musicbrainz.org";
     private static final String MUSICBRAINZ_RECORDING_ID = "musicbrainz_trackid";
@@ -770,7 +757,7 @@ public final class Mp3Parser implements Parser {
     }
 
     private String userTextName(final String description) {
-        return PICARD_USER_TEXT.getOrDefault(description, description.toLowerCase(Locale.ROOT));
+        return PicardNames.userTextName(description);
     }
 
     private String uniqueFileIdName(final String owner) {
