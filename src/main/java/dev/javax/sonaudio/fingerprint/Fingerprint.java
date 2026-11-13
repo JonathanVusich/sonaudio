@@ -49,6 +49,8 @@ public final class Fingerprint {
 
     // One 32-bit sub-fingerprint per row of the chroma image the classifiers fit in, about eight a second.
     private final int[] subFingerprints;
+    // Compressed as it's made: writing through a bit stream declares IOException, as reading the audio does.
+    private final String compressed;
 
     /**
      * Fingerprints integer audio, as FLAC decodes, decoding only as much of it as it needs.
@@ -59,6 +61,7 @@ public final class Fingerprint {
      */
     public Fingerprint(final IntPcmAudio audio) throws IOException, InvalidFormatException {
         this.subFingerprints = subFingerprints(new Signal(audio));
+        this.compressed = compress();
     }
 
     /**
@@ -71,6 +74,7 @@ public final class Fingerprint {
      */
     public Fingerprint(final FloatPcmAudio audio) throws IOException, InvalidFormatException {
         this.subFingerprints = subFingerprints(new Signal(audio));
+        this.compressed = compress();
     }
 
     private static int[] subFingerprints(final Signal signal) {
@@ -89,12 +93,15 @@ public final class Fingerprint {
     }
 
     /**
-     * Compresses the fingerprint as Chromaprint does.
+     * The fingerprint compressed as Chromaprint compresses it.
      *
      * @return the fingerprint compressed and base64-encoded, as {@code fpcalc} prints it and AcoustID takes it
-     * @throws IOException never in practice, as the bits are written to memory, but the bit stream declares it
      */
-    public String compressed() throws IOException {
+    public String compressed() {
+        return compressed;
+    }
+
+    private String compress() throws IOException {
         final var outputStream = new ByteArrayOutputStream();
         // Chromaprint packs each value least significant bit first.
         final var bitStream = BitOutputStream.wrap(outputStream, ByteOrder.LITTLE_ENDIAN);
