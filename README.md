@@ -83,6 +83,21 @@ The comparisons against real files and `fpcalc`'s output (`Mp3CorpusComparisonTe
 read their inputs from environment variables, and are skipped when those aren't set. They're not in git: they stay
 local.
 
+## References
+
+Every reference the tests compare against (FFmpeg's decoded samples, `fpcalc`'s fingerprints) comes from one Docker
+image, built from source at pinned versions: FFmpeg 9.0.2 with its native ALAC and Opus decoders (and libopus 1.6.1 to
+encode with), and Chromaprint 1.6.2's `fpcalc` built on that FFmpeg. `reference/Dockerfile` has the versions and
+checksums, and `reference/README.md` the rest. The ALAC and Opus fixtures under `src/test/resources` come from it:
+`reference/make-fixtures.sh` makes them again, byte for byte, and each constant of `AlacSample` and `OpusSample` says
+how its file was made and what's in it.
+
+FFmpeg's own test cases (its FATE suite) are a bigger check, and they run locally only. `reference/prepare-fate.sh`
+builds the image if it's missing, downloads the ~75 MB of FATE samples it needs and makes their references, all into
+the git-ignored `.fate-samples/` (or into the directory you give it); a second run does nothing that's already done.
+The tests read that directory, or the one `FATE_SAMPLES` names, and are skipped when there isn't one, so CI skips
+them.
+
 ## License
 
 [MIT](LICENSE).
