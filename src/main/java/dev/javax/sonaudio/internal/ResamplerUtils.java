@@ -1,12 +1,13 @@
-package dev.javax.sonaudio.fingerprint;
+package dev.javax.sonaudio.internal;
 
 import lombok.experimental.UtilityClass;
 
 /**
- * The arithmetic {@link Resampler} builds its filter and reads its input with, as libswresample does.
+ * The arithmetic libswresample builds its filters and reads its input with, which the fingerprint package's resampler
+ * and the Opus decoder's share.
  */
 @UtilityClass
-class ResamplerUtils {
+public class ResamplerUtils {
 
     // FFmpeg's av_bessel_i0 for the arguments up to 15 a Kaiser window of beta 9 gives it: Blair and Edwards' minimax
     // rational approximation.
@@ -40,7 +41,7 @@ class ResamplerUtils {
      * @return the sample at the position, where the samples before the start are its mirror image and those after the
      *     end its reflection, or 0 past those
      */
-    static float extendedSample(final float[] input, final int length, final int position) {
+    public static float extendedSample(final float[] input, final int length, final int position) {
         var source = position;
         if (position < 0) {
             source = -position;
@@ -58,7 +59,7 @@ class ResamplerUtils {
      *     band
      * @return sin(x) / x, which is 1 at 0
      */
-    static double sinc(final double x, final double sign, final double factor) {
+    public static double sinc(final double x, final double sign, final double factor) {
         if (x == 0) {
             return 1.0;
         }
@@ -71,7 +72,7 @@ class ResamplerUtils {
     /**
      * @return as many phases as the rates make exact, if that's under the most asked for
      */
-    static int exactPhaseCount(final int inputRate, final int outputRate, final int maxPhases) {
+    public static int exactPhaseCount(final int inputRate, final int outputRate, final int maxPhases) {
         final var exact = outputRate / greatestCommonDivisor(outputRate, inputRate);
         if (exact <= maxPhases) {
             return (int) exact;
@@ -79,7 +80,7 @@ class ResamplerUtils {
         return maxPhases;
     }
 
-    static long greatestCommonDivisor(final long first, final long second) {
+    public static long greatestCommonDivisor(final long first, final long second) {
         var larger = first;
         var smaller = second;
         while (smaller != 0) {
@@ -93,7 +94,7 @@ class ResamplerUtils {
     /**
      * @return the modified Bessel function of the first kind and order 0, for arguments up to 15
      */
-    static double besselI0(final double x) {
+    public static double besselI0(final double x) {
         if (x == 0) {
             return 1.0;
         }
@@ -104,7 +105,7 @@ class ResamplerUtils {
     /**
      * @param coefficients from the constant term up
      */
-    static double evaluatePolynomial(final double[] coefficients, final double x) {
+    public static double evaluatePolynomial(final double[] coefficients, final double x) {
         var sum = coefficients[coefficients.length - 1];
         for (var i = coefficients.length - 2; i >= 0; i--) {
             sum *= x;

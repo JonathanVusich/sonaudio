@@ -12,28 +12,23 @@ import java.util.stream.LongStream;
  * that start in it, and the one that straddles its start, and FFmpeg decodes but drops those just before it. The
  * track's start then drops the packets before its first edit and the part of the packet it starts in, and its end,
  * which is where the track's duration or an {@code iTunSMPB} tag puts it, drops the padding after.
- *
- * <p>A planner works out one track's packets, once.
  */
 final class AlacPacketPlanner {
 
-    private static final int KEPT = 0;
-    private static final int DROPPED = 1;
+    /**
+     * Where an edit is among the track's, which sets what FFmpeg does with it.
+     */
+    private enum EditPlace {
+        // An empty edit before any media: it only delays the audio, which FFmpeg's decoded samples don't show.
+        LEADING_EMPTY,
+        // The first edit of the track's media, the only one that FFmpeg starts in the middle of a packet.
+        FIRST_MEDIA,
+        LATER
+    }
 
     private final Track.Alac track;
     private final long movieTimeScale;
     private final SampleIndex index;
-    private final IntStream.Builder samples = IntStream.builder();
-    private final LongStream.Builder timestamps = LongStream.builder();
-    private final IntStream.Builder droppedFlags = IntStream.builder();
-    private final LongStream.Builder durations = LongStream.builder();
-    // Where the entries of the edit list end, in the track's time scale, which the track's duration is held to.
-    private long editsEnd;
-    private long initialSkip;
-    private int nonEmptyEdits;
-    // FFmpeg gives each entry the duration of the next sample of its time table, which it steps through as it adds
-    // entries, from the first, whichever samples they are.
-    private int timeCursor;
 
     AlacPacketPlanner(final Track.Alac track, final long movieTimeScale) throws InvalidFormatException {
         this.track = track;
@@ -46,123 +41,137 @@ final class AlacPacketPlanner {
      * @return the packets FFmpeg returns, and what it trims of them
      */
     AlacPackets plan(final List<Gapless> gaplessTags) {
-        final var edits = track.edits();
-        final var duration = editedTrack(edits);
-        final var sampleRate = track.cookie().sampleRate();
-        final var picked = samples.build().toArray();
-        final var pickedTimes = timestamps.build().toArray();
-        final var entryDurations = entryDurations(pickedTimes, duration);
-        final var window = discardWindow(gaplessTags, pickedTimes, entryDurations, duration);
-        final var offsets = new long[picked.length];
-        final var sizes = new int[picked.length];
-        final var nominal = new long[picked.length];
-        final var paddings = new int[picked.length];
-        final var dropped = new BitSet(picked.length);
-        final var droppedValues = droppedFlags.build().toArray();
-        for (var entry = 0; entry < picked.length; entry++) {
-            final var sample = picked[entry];
+        final var walk = walkEdits(track.edits());
+        final var duration = trackDuration(walk);
+        final var entries = walk.samples().length;
+        final var entryDurations = entryDurations(walk.times(), duration);
+        final var window = discardWindow(gaplessTags, walk.times(), entryDurations, duration);
+        final var offsets = new long[entries];
+        final var sizes = new int[entries];
+        final var nominal = new long[entries];
+        final var paddings = new int[entries];
+        final var dropped = new BitSet(entries);
+        for (var entry = 0; entry < entries; entry++) {
+            final var sample = walk.samples()[entry];
             offsets[entry] = index.offset(sample);
             sizes[entry] = index.size(sample);
-            nominal[entry] = AlacUtils.rescale(index.duration(sample), sampleRate, track.timeScale());
-            dropped.set(entry, droppedValues[entry] == DROPPED);
-            if (window.appliesTo(entry, picked.length)) {
-                paddings[entry] = window.padding(pickedTimes[entry], entryDurations[entry]);
+            nominal[entry] =
+                    AlacUtils.rescale(index.duration(sample), track.cookie().sampleRate(), track.timeScale());
+            dropped.set(entry, walk.dropped()[entry] == EditWalk.DROPPED);
+            if (window.appliesTo(entry, entries)) {
+                paddings[entry] = window.padding(walk.times()[entry], entryDurations[entry]);
             }
         }
-        return new AlacPackets(offsets, sizes, nominal, dropped, paddings, initialSkip);
+        return new AlacPackets(offsets, sizes, nominal, dropped, paddings, walk.skip());
     }
 
-    // An entry without a duration lasts until the next starts, or until the track's duration for the last.
-    private long[] entryDurations(final long[] pickedTimes, final long duration) {
-        final var entryDurations = durations.build().toArray();
-        for (var entry = 0; entry < entryDurations.length; entry++) {
-            if (entryDurations[entry] == 0) {
-                final var next = nextTime(pickedTimes, entry, duration);
-                if (next >= pickedTimes[entry]) {
-                    entryDurations[entry] = next - pickedTimes[entry];
-                }
-            }
-        }
-        return entryDurations;
-    }
-
-    private long nextTime(final long[] pickedTimes, final int entry, final long duration) {
-        if (entry + 1 < pickedTimes.length) {
-            return pickedTimes[entry + 1];
-        }
-        return duration;
-    }
-
-    // Arranges the samples by the edit list, and works out the track's duration, as FFmpeg's stream gets it.
-    private long editedTrack(final List<Edit> edits) {
+    // The track's duration as FFmpeg's stream gets it: the shortest of the media's, the time table's and the edits'.
+    private long trackDuration(final EditWalk walk) {
         var duration = track.duration();
         final var total = track.table().totalDuration();
         if (total != 0) {
             duration = Math.min(duration, total);
         }
-        if (edits.isEmpty() || index.count() == 0) {
-            for (var sample = 0; sample < index.count(); sample++) {
-                add(sample, index.timestamp(sample), KEPT);
-            }
+        if (track.edits().isEmpty() || index.count() == 0) {
             return duration;
         }
-        for (final var edit : edits) {
-            walkEdit(edit);
-        }
-        return Math.min(duration, editsEnd);
+        return Math.min(duration, walk.editsEnd());
     }
 
-    private void walkEdit(final Edit edit) {
-        final var length = AlacUtils.rescale(edit.duration(), track.timeScale(), movieTimeScale);
-        final var counter = editsEnd;
-        editsEnd += length;
-        // Empty edits before the first of the track's media only delay it, which FFmpeg's decoded audio doesn't show.
-        switch (edit) {
-            case Edit.Empty _ -> {
-                if (nonEmptyEdits == 0) {
-                    return;
-                }
+    // Without an edit list every sample plays, at its own time.
+    private EditWalk walkEdits(final List<Edit> edits) {
+        if (edits.isEmpty() || index.count() == 0) {
+            final var samples = IntStream.range(0, index.count()).toArray();
+            final var times = new long[samples.length];
+            for (var sample = 0; sample < times.length; sample++) {
+                times[sample] = index.timestamp(sample);
             }
-            case Edit.Media _ -> {}
+            return new EditWalk(samples, times, new int[samples.length], 0, 0);
         }
-        nonEmptyEdits++;
+        var walk = new EditWalk(new int[0], new long[0], new int[0], 0, 0);
+        var mediaEdits = 0;
+        for (final var edit : edits) {
+            final var place = editPlace(edit, mediaEdits);
+            if (place != EditPlace.LEADING_EMPTY) {
+                mediaEdits++;
+            }
+            walk = walk.followedBy(walkEdit(edit, place, walk.editsEnd()));
+        }
+        return walk;
+    }
+
+    private EditPlace editPlace(final Edit edit, final int mediaEditsBefore) {
+        if (mediaEditsBefore > 0) {
+            return EditPlace.LATER;
+        }
+        return switch (edit) {
+            case Edit.Empty _ -> EditPlace.LEADING_EMPTY;
+            case Edit.Media _ -> EditPlace.FIRST_MEDIA;
+        };
+    }
+
+    private EditWalk walkEdit(final Edit edit, final EditPlace place, final long editStart) {
+        final var length = AlacUtils.rescale(edit.duration(), track.timeScale(), movieTimeScale);
+        final var editEnd = editStart + length;
+        if (place == EditPlace.LEADING_EMPTY) {
+            return new EditWalk(new int[0], new long[0], new int[0], 0, editEnd);
+        }
         final var mediaTime = edit.mediaTime();
         // An audio decoder wouldn't need a second of lead-in for ALAC, but FFmpeg starts that early all the same.
         final var from = Math.max(mediaTime - track.timeScale(), index.timestamp(0));
-        walkSamples(index.lastStartingAtOrBefore(from), mediaTime, length, counter);
+        return walkSamples(index.lastStartingAtOrBefore(from), mediaTime, length, editStart, place);
     }
 
-    private void walkSamples(final int firstSample, final long mediaTime, final long length, final long start) {
+    // Goes through the samples from the first, until the first that ends at or after the edit's end. A sample before
+    // the edit, or after it, is dropped, except for the one that the first edit starts in, of which the start is
+    // skipped.
+    private EditWalk walkSamples(
+            final int firstSample,
+            final long mediaTime,
+            final long length,
+            final long editStart,
+            final EditPlace place) {
+        final var samples = IntStream.builder();
+        final var times = LongStream.builder();
+        final var dropped = IntStream.builder();
         final var end = length + mediaTime;
-        var counter = start;
+        var counter = editStart;
+        var skip = 0L;
         var started = false;
-        final var first = nonEmptyEdits == 1;
         for (var sample = firstSample; sample < index.count(); sample++) {
             final var frameDuration = frameDuration(sample, length);
             final var time = index.timestamp(sample);
-            var status = KEPT;
+            var status = EditWalk.KEPT;
             if (time < mediaTime || time >= end) {
-                if (time < mediaTime && time + frameDuration > mediaTime && first) {
-                    initialSkip += mediaTime - time;
+                if (time < mediaTime && time + frameDuration > mediaTime && place == EditPlace.FIRST_MEDIA) {
+                    skip += mediaTime - time;
                     counter -= mediaTime - time;
                     started = true;
                 } else {
-                    status = DROPPED;
-                    if (!started && first) {
-                        initialSkip += frameDuration;
+                    status = EditWalk.DROPPED;
+                    if (!started && place == EditPlace.FIRST_MEDIA) {
+                        skip += frameDuration;
                     }
                 }
             } else {
                 started = true;
             }
-            add(sample, counter, status);
+            samples.add(sample);
+            times.add(counter);
+            dropped.add(status);
             if (started) {
                 counter += frameDuration;
             }
             if (time + frameDuration >= end) {
-                return;
+                break;
             }
         }
+        return new EditWalk(
+                samples.build().toArray(),
+                times.build().toArray(),
+                dropped.build().toArray(),
+                skip,
+                editStart + length);
     }
 
     private long frameDuration(final int sample, final long editLength) {
@@ -172,33 +181,44 @@ final class AlacPacketPlanner {
         return editLength;
     }
 
-    // The status is KEPT or DROPPED, which a packet's flag in the dropped flags is.
-    private void add(final int sample, final long timestamp, final int status) {
-        samples.add(sample);
-        timestamps.add(timestamp);
-        droppedFlags.add(status);
-        if (timeCursor < Math.min(track.table().timedSamples(), index.count())) {
-            durations.add(index.duration(timeCursor));
-        } else {
-            durations.add(0);
+    // FFmpeg gives each entry the duration of the next sample of its time table, which it steps through as it adds
+    // entries, from the first, whichever samples they are. An entry without a duration lasts until the next starts, or
+    // until the track's duration for the last.
+    private long[] entryDurations(final long[] times, final long duration) {
+        final var timed = (int) Math.min(track.table().timedSamples(), index.count());
+        final var entryDurations = new long[times.length];
+        for (var entry = 0; entry < times.length; entry++) {
+            if (entry < timed) {
+                entryDurations[entry] = index.duration(entry);
+            }
+            if (entryDurations[entry] == 0) {
+                final var next = nextTime(times, entry, duration);
+                if (next >= times[entry]) {
+                    entryDurations[entry] = next - times[entry];
+                }
+            }
         }
-        timeCursor++;
+        return entryDurations;
+    }
+
+    private long nextTime(final long[] times, final int entry, final long duration) {
+        if (entry + 1 < times.length) {
+            return times[entry + 1];
+        }
+        return duration;
     }
 
     // The last tag that fits the track sets the window as the file is read, and a tag that doesn't leaves it to the
     // last packet, which sets it as it is returned.
     private DiscardWindow discardWindow(
-            final List<Gapless> gaplessTags,
-            final long[] pickedTimes,
-            final long[] entryDurations,
-            final long duration) {
+            final List<Gapless> gaplessTags, final long[] times, final long[] entryDurations, final long duration) {
         for (final var gapless : gaplessTags.reversed()) {
             final var window = smpbWindow(gapless, duration);
             if (window.first() != 0) {
                 return window;
             }
         }
-        return lastPacketWindow(pickedTimes, entryDurations, duration);
+        return lastPacketWindow(times, entryDurations, duration);
     }
 
     // iTunes' tag puts the end of the audio where its remainder starts, when it fits in the track. A window that
@@ -216,14 +236,14 @@ final class AlacPacketPlanner {
     }
 
     // Without the tag, the end of the last packet is trimmed to the track's duration.
-    private DiscardWindow lastPacketWindow(final long[] pickedTimes, final long[] entryDurations, final long duration) {
+    private DiscardWindow lastPacketWindow(final long[] times, final long[] entryDurations, final long duration) {
         final var sampleRate = track.cookie().sampleRate();
         final var timeScale = track.timeScale();
-        if (pickedTimes.length == 0) {
+        if (times.length == 0) {
             return new DiscardWindow(sampleRate, timeScale, 0, 0, DiscardWindow.Scope.LAST_PACKET);
         }
-        final var last = pickedTimes.length - 1;
-        final var time = pickedTimes[last];
+        final var last = times.length - 1;
+        final var time = times[last];
         var length = 0L;
         if (duration >= time) {
             length = Math.min(entryDurations[last], duration - time);
