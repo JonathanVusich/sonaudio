@@ -187,20 +187,22 @@ from `tab.c`). No state is allocated per frame except the small `CeltFrame`/`Cel
 has a post-filter, its parameters.
 
 **Parity** (16-bit, rounded as `Mp3DecoderTest.sixteenBits`): every CELT-only fixture and FATE vector 01, 07, 11 and
-`tron.6ch.tinypkts` is within 1 of the reference (`OpusCeltParityTest`). The references come from the x86 FMA3 assembly
-paths of the image's FFmpeg (the container's CPU has fma, avx2: `opus_postfilter_fma3`, `opus_deemphasis_fma3`, and
-`libavutil/tx`'s SIMD FFTs); a C-only build of 9.0.2 (`--disable-x86asm`) gives output that differs from them by at most 1, in
-between 1 in 5000 and 1 in 100000 samples (testvector01: 346 of 2.83 M). CELT here is the C arithmetic (float and double mixed as the C does, see below).
-It is at most 1 from both: against the committed (asm) references 433 of 2.83 M samples of testvector01 are off by one,
-against the C build 400. It does not try to reproduce the asm's fused multiply-adds.
+`tron.6ch.tinypkts` is within 1 of the reference (`OpusCeltParityTest`). The references reflect the x86 SIMD paths of
+the image's FFmpeg (this CPU has fma and avx2, so `opus_postfilter_fma3` and `opus_deemphasis_fma3` run, and probably
+`libavutil/tx`'s SIMD FFTs; the latter is not checked). Verified: the image's `ffmpeg -cpuflags 0` output is
+byte-identical to a C-only build of 9.0.2 (`--disable-x86asm`) on all 19 files tried, so the C path is what
+`-cpuflags 0` gives. The SIMD output differs from the C output by 1 LSB in 1 to 530 samples per file (testvector01: 345
+of 2830080; testvector11: 530 of 2881920; the 11520-sample fixtures: 1 to 11). This decoder is the C arithmetic (float
+and double mixed as the C does) and is at most 1 from both: against the committed (SIMD) references 433 samples of
+testvector01 differ by 1, against the C build 400. It does not reproduce the asm's fused multiply-adds.
 
 **Not CELT-only** (they were listed as such): `SURROUND51`'s third stream (the centre channel) is hybrid, as its
-TOC bytes say per stream; only the first stream's TOC is what `inspect-opus.py` prints. Its other five channels are
-within 1; the centre differs until SILK exists. testvector08 and 09 have 5 SILK NB packets at the start (samples
-0 to 4800): all differences are in the first 5041 and 4906 samples respectively, and the rest, 1.3 M samples, is within
-1. testvector10 alternates CELT with hybrid stretches; its first difference is at its first hybrid packet (sample 672000),
-and 55653 of its 1.03 M wrong samples lie outside the hybrid stretches and the 20 ms after each (the CELT history that
-the hybrid frames feed carries on).
+TOC bytes say per stream; `inspect-opus.py` prints only the first stream's. With CELT alone, its other five channels
+are within 1 and the centre is off (max 16594, 9598 samples beyond 1); testvector08 and 09 have 5 SILK NB packets in
+their first 4800 samples (CELT alone: all 6956 and 9148 bad samples lie in samples 36 to 5041 and 36 to 4906); and
+testvector10 has hybrid stretches from sample 672000. After merging `alac-opus` (SILK, c559406) the scratch run shows
+SURROUND51 and FATE testvectors 01 to 12, `silk-lbrr`, `silk-lbrr-mono` and `tron.6ch.tinypkts` all within 1 (max
+error 1, 0 samples beyond). Only that parity scan ran on the merge.
 
 **FFmpeg quirks reproduced** (all verified against a debug build of 9.0.2 that printed the allocation, energies and
 band shapes):
