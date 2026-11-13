@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Decodes a frame that the test encodes with the RFC's range encoder: a 10 ms narrowband mono frame that the voice
  * activity detector found inactive, with no pulses. The decoder is checked against FFmpeg's on real files by
- * {@link OpusSilkParityTest}.
+ * {@link OpusDecoderParityTest}.
  */
 class SilkDecoderTest {
 
