@@ -14,21 +14,26 @@ class CeltTables {
      */
     static final int BAND_COUNT = 21;
 
-    // The first bin of each band at the shortest frame size, in steps of 200 Hz, with the end of the last as well.
+    // The first coefficient of each band at the shortest frame size (200 Hz apart), with the end of the last band as
+    // well, how many coefficients each band has, and the base 2 logarithm of that in eighths of a bit.
     static final int[] BAND_START = {0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 28, 34, 40, 48, 60, 78, 100};
     static final int[] BAND_WIDTH = {1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 4, 4, 4, 6, 6, 8, 12, 18, 22};
     static final int[] LOG_BAND_WIDTH = {0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8, 16, 16, 16, 21, 21, 24, 29, 34, 36};
+    // The time-frequency change a band gets by the frame's size, transient flag, select flag and the band's own flag.
     static final int[][][][] TF_SELECT = {
         {{{0, -1}, {0, -1}}, {{0, -1}, {0, -1}}},
         {{{0, -1}, {0, -2}}, {{1, 0}, {1, -1}}},
         {{{0, -2}, {0, -3}}, {{2, 0}, {1, -1}}},
         {{{0, -2}, {0, -3}}, {{3, 0}, {1, -1}}}
     };
+    // The mean energy of each band that the coded energy is relative to.
     static final float[] MEAN_ENERGY = {
         6.437500f, 6.250000f, 5.750000f, 5.312500f, 5.062500f, 4.812500f, 4.500000f, 4.375000f, 4.875000f, 4.687500f,
         4.562500f, 4.437500f, 4.875000f, 4.625000f, 4.312500f, 4.500000f, 4.375000f, 4.625000f, 4.750000f, 4.437500f,
         3.750000f, 3.750000f, 3.750000f, 3.750000f, 3.750000f
     };
+    // The Laplace models of the coarse energy by frame size, for inter then intra frames: the frequency of zero and the
+    // decay, for each band.
     static final int[][][] COARSE_ENERGY_DIST = {
         {
             {
@@ -71,6 +76,8 @@ class CeltTables {
             }
         }
     };
+    // The static allocation vectors, in 1/32 bit per sample, and the most each band may be given by frame size and
+    // channel count.
     static final int[][] STATIC_ALLOC = {
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
         {90, 80, 75, 69, 63, 56, 49, 40, 34, 29, 20, 18, 10, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -102,9 +109,13 @@ class CeltTables {
             {204, 204, 204, 204, 204, 204, 204, 204, 201, 201, 201, 201, 198, 198, 198, 187, 187, 175, 140, 66, 40}
         }
     };
+    // The cost in eighths of a bit of the intensity band's position, by the number of bands it can be in.
     static final int[] LOG2_FRAC = {
         0, 8, 13, 16, 19, 21, 23, 24, 26, 27, 28, 29, 30, 31, 32, 32, 33, 34, 34, 35, 36, 36, 37, 37
     };
+    // How the bits of a collapse mask spread out and come back together as short blocks are recombined, the order the
+    // Hadamard transform puts blocks in (a run for each of 2, 4, 8 and 16 blocks, then the natural order), two to the
+    // power of an eighth of an octave in Q14 (which scales the angle resolution), and the post-filter taps by tone set.
     static final int[] BIT_INTERLEAVE = {0, 1, 1, 1, 2, 3, 3, 3, 2, 3, 3, 3, 2, 3, 3, 3};
     static final int[] BIT_DEINTERLEAVE = {
         0x00, 0x03, 0x0C, 0x0F, 0x30, 0x33, 0x3C, 0x3F, 0xC0, 0xC3, 0xCC, 0xCF, 0xF0, 0xF3, 0xFC, 0xFF
@@ -120,8 +131,8 @@ class CeltTables {
         {0.7998046875f, 0.1000976562f, 0.0f}
     };
 
-    // How many bits the three-way stereo angle step and spread decisions use: the inverse CDFs of the models that
-    // FFmpeg lists as CDFs, which {@link RangeDecoder#decodeIcdf} takes.
+    // The spread, allocation trim and tone set models as the inverse CDFs that {@link RangeDecoder#decodeIcdf} takes,
+    // with the base 2 logarithm of each one's total. FFmpeg lists them as CDFs.
     static final int[] SPREAD_ICDF = {25, 23, 2, 0};
     static final int SPREAD_BITS = 5;
     static final int[] ALLOCATION_TRIM_ICDF = {126, 124, 119, 109, 87, 41, 19, 9, 4, 2, 0};

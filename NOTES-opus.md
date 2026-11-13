@@ -77,6 +77,8 @@ The full contracts are in the Javadoc of those three files; the short version:
   length (`OpusStream.decodeFrameOrSilence`), which is already implemented. No exception may escape otherwise.
 
 ### The stubs
+(`CeltDecoder` is not one any more: see the CELT section below.)
+
 `SilkDecoder`, `CeltDecoder` and `SilkResampler` write **silence** and **consume nothing** from the range decoder.
 Consequences you will see until they are real: in SILK-only mode `tell()` stays at 1, so `OpusStream.readRedundancy`
 always "finds" a redundancy frame (a garbage path that decodes a stub CELT frame and fades silence: harmless, and it
@@ -165,10 +167,66 @@ a **separate frame after the last packet's** (FFmpeg's drain). `OpusStream` mode
   SILK NB/MB/WB and hybrid SWB), `testvector09` (a few SILK NB stereo packets among CELT).
 - **Hybrid**: `OpusSample.HYBRID_*`, `MULTIFRAME_HYBRID_*`; FATE `testvector05` (SWB), `06` (FB), `silk-lbrr` (SWB
   stereo, LBRR), `testvector12`.
-- **CELT-only**: `OpusSample.CELT_*`, `MULTIFRAME_CELT_*`, `SURROUND51` (4 streams, 2 coupled); FATE `testvector01`
-  (stereo, frames 2.5-20 ms, 1-5 per packet), `07`, `08`, `09`, `10`, `11` (all bandwidths, mono/stereo switching, up to
-  6 frames per packet), `tron.6ch.tinypkts` (6 channels, 4 streams, 2.5 ms CELT).
+- **CELT-only**: `OpusSample.CELT_*`, `MULTIFRAME_CELT_*`; FATE `testvector01` (stereo, frames 2.5-20 ms, 1-5 per
+  packet), `07`, `11` (all bandwidths, mono/stereo switching, up to 6 frames per packet), `tron.6ch.tinypkts` (6
+  channels, 4 streams, 2.5 ms CELT). Not CELT-only: `SURROUND51` (its centre stream is hybrid), `08` and `09` (SILK NB
+  packets in their first 100 ms), `10` (hybrid stretches).
 - Mode/bandwidth transitions and redundancy: `testvector12`, `testvector09`, `testvector07`/`08`/`10`.
+
+## CELT (written by the CELT agent; `CeltDecoder` is real, no longer a stub)
+
+Every class named `Celt*` in `format/opus` is CELT's. `CeltDecoder.decodeFrame` follows FFmpeg 9.0.2's
+`ff_celt_decode_frame` step by step (`dec_celt.c`, `celt.c`, `pvq.c`, `rc.c`, `tab.c`, `dsp.c`); the pieces are
+`CeltEnergy` (coarse, fine, final energy, denormalisation, the last two frames' energies), `CeltTimeFrequency`,
+`CeltBitAllocator` (`ff_celt_bitalloc`), `CeltBandDecoder` (`ff_celt_quant_bands` and `quant_band_template`: PVQ,
+theta, stereo, folding, tf recombination, Hadamard), `CeltPulseUtils` (U(N,K) table built at class load, index to
+vector, bit cost cache search, fixed-point cos and log-tan), `CeltVectorUtils` (rotation, Haar, Hadamard, stereo
+merge), `CeltAntiCollapse`, `CeltChannelSynthesis` (inverse MDCT and window, post-filter, de-emphasis, per channel),
+`CeltMdct` and `CeltFft`, `CeltNoise` (the LCG), `CeltTables`/`CeltCacheTables`/`CeltWindowTables` (tables generated
+from `tab.c`). No state is allocated per frame except the small `CeltFrame`/`CeltAllocation` records and, when a frame
+has a post-filter, its parameters.
+
+**Parity** (16-bit, rounded as `Mp3DecoderTest.sixteenBits`): every CELT-only fixture and FATE vector 01, 07, 11 and
+`tron.6ch.tinypkts` is within 1 of the reference (`OpusCeltParityTest`). The references come from the x86 FMA3 assembly
+paths of the image's FFmpeg (the container's CPU has fma, avx2: `opus_postfilter_fma3`, `opus_deemphasis_fma3`, and
+`libavutil/tx`'s SIMD FFTs); a C-only build of 9.0.2 (`--disable-x86asm`) gives output that differs from them by at most 1, in
+between 1 in 5000 and 1 in 100000 samples (testvector01: 346 of 2.83 M). CELT here is the C arithmetic (float and double mixed as the C does, see below).
+It is at most 1 from both: against the committed (asm) references 433 of 2.83 M samples of testvector01 are off by one,
+against the C build 400. It does not try to reproduce the asm's fused multiply-adds.
+
+**Not CELT-only** (they were listed as such): `SURROUND51`'s third stream (the centre channel) is hybrid, as its
+TOC bytes say per stream; only the first stream's TOC is what `inspect-opus.py` prints. Its other five channels are
+within 1; the centre differs until SILK exists. testvector08 and 09 have 5 SILK NB packets at the start (samples
+0 to 4800): all differences are in the first 5041 and 4906 samples respectively, and the rest, 1.3 M samples, is within
+1. testvector10 alternates CELT with hybrid stretches; its first difference is at its first hybrid packet (sample 672000),
+and 55653 of its 1.03 M wrong samples lie outside the hybrid stretches and the 20 ms after each (the CELT history that
+the hybrid frames feed carries on).
+
+**FFmpeg quirks reproduced** (all verified against a debug build of 9.0.2 that printed the allocation, energies and
+band shapes):
+
+- The allocation's final interpolation trims `caps` too when the upper vector is past the table (`high >= 11`): found
+  only by a high-bitrate fixture. The trim offset applies to every non-zero `bits2`, including the caps.
+- Silent frames still decode everything (bands, final energy) so that `rc->range` seeds the next frame's noise; the
+  coefficients and energies are replaced afterwards. The seed is `rc->range` at the end of every frame
+  (`RangeDecoder.range()`), 0 after a reset.
+- The post-filter, silence and transient checks use `consumed`, which is the `tell` before the silence flag until the
+  post-filter parse updates it.
+- The post-filter cross-fade mixes doubles and floats: `(1.0 - w) * g * x` terms are double, the new filter's terms
+  float, added in the order of the C expression; `data[i] += ...` rounds to float once.
+- The `celt_cos` of the theta split keeps 16 bits at each step as the C does. The index of a PVQ vector is up to 32
+  bits, decoded with the range decoder's `decode`/`update`/`decodeRawBits` (its `decodeUniform` takes an `int`).
+- Stereo output from a mono-coded frame decodes channel 1 from channel 0's coefficients with its own history, and mono
+  output from a stereo-coded frame adds the channels' coefficients, halves after the IMDCT, and leaves channel 1's
+  history untouched, as FFmpeg does.
+- The inverse MDCT is FFmpeg's half transform (`n` samples, the reversed DCT-IV, scaled by `-1/32768`), computed
+  through an `n/2`-point complex FFT (mixed radix 2, 3, 5), not its split-radix/PFA code: the results differ at the
+  level of float rounding (the MDCT test checks the definition in double).
+- `isnormal(emph_coeff)` after each frame zeroes the de-emphasis memory when it is subnormal or not finite.
+- Packet-loss concealment does not exist in FFmpeg's decoder, so none here. `apply_phase_inv` defaults to 1 and is
+  honoured (the inversion bit of stereo bands that have no angle is decoded and applied).
+
+**Edits outside the CELT files**: `RangeDecoder.range()` (one accessor), nothing else.
 
 ## Where the FATE tests run
 
