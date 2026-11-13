@@ -8,37 +8,51 @@ import lombok.experimental.UtilityClass;
 @UtilityClass
 final class SilkModels {
 
+    // The model of which of the two frames of a 40 ms packet have an LBRR copy (RFC 6716 section 4.2.4).
     static final int[] LBRR_FLAGS_40 = {203, 150, 0};
 
+    // The same for the three frames of a 60 ms packet (section 4.2.4).
     static final int[] LBRR_FLAGS_60 = {215, 195, 166, 125, 110, 82, 0};
 
+    // The model of the first stereo prediction weight index, the coarse position in the weights (section 4.2.7.1).
     static final int[] STEREO_S1 = {
         249, 247, 246, 245, 244, 234, 210, 202, 201, 200, 197, 174, 82, 59, 56, 55, 54, 46, 22, 12, 11, 10, 9, 7, 0
     };
 
+    // The model of the second index, which picks one of three steps (section 4.2.7.1).
     static final int[] STEREO_S2 = {171, 85, 0};
 
+    // The model of the third index, which picks one of five fine positions (section 4.2.7.1).
     static final int[] STEREO_S3 = {205, 154, 102, 51, 0};
 
+    // The model of the flag that says the side channel is not coded (section 4.2.7.2).
     static final int[] MID_ONLY = {64, 0};
 
+    // The model of the frame type of a frame the voice activity detector found inactive (section 4.2.7.3).
     static final int[] FRAME_TYPE_INACTIVE = {230, 0};
 
+    // The same for an active frame (section 4.2.7.3).
     static final int[] FRAME_TYPE_ACTIVE = {232, 158, 10, 0};
 
+    // The models of a gain's three high bits, by signal type (section 4.2.7.4).
     static final int[][] GAIN_HIGHBITS = {
         {224, 112, 44, 15, 3, 2, 1, 0},
         {254, 237, 192, 132, 70, 23, 4, 0},
         {255, 252, 226, 155, 61, 11, 2, 0}
     };
 
+    // The uniform model of eight values: a gain's three low bits (section 4.2.7.4), and the low bits of a wideband
+    // pitch
+    // lag (section 4.2.7.6.1).
     static final int[] GAIN_LOWBITS = {224, 192, 160, 128, 96, 64, 32, 0};
 
+    // The model of the gain of a subframe as a change from the one before (section 4.2.7.4).
     static final int[] GAIN_DELTA = {
         250, 245, 234, 203, 71, 50, 42, 38, 35, 33, 31, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14,
         13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
     };
 
+    // The models of the stage-1 LSF index, by bandwidth and signal type (section 4.2.7.5.1).
     static final int[][][] LSF_S1 = {
         {
             {
@@ -62,6 +76,7 @@ final class SilkModels {
         }
     };
 
+    // The models of the stage-2 LSF residuals, by codebook selection (section 4.2.7.5.2).
     static final int[][] LSF_S2 = {
         {255, 254, 253, 238, 14, 3, 2, 1, 0},
         {255, 254, 252, 218, 35, 3, 2, 1, 0},
@@ -81,52 +96,71 @@ final class SilkModels {
         {255, 248, 227, 177, 100, 19, 2, 1, 0}
     };
 
+    // The model of how far a residual of the largest size goes beyond it (section 4.2.7.5.2).
     static final int[] LSF_S2_EXT = {100, 40, 16, 7, 3, 1, 0};
 
+    // The model of the LSF interpolation weight of a frame of 20 ms (section 4.2.7.5.5).
     static final int[] LSF_INTERPOLATION_OFFSET = {243, 221, 192, 181, 0};
 
+    // The model of the high bits of an absolute pitch lag (section 4.2.7.6.1).
     static final int[] PITCH_HIGHBITS = {
         253, 250, 244, 233, 212, 182, 150, 131, 120, 110, 98, 85, 72, 60, 49, 40, 32, 25, 19, 15, 13, 11, 9, 8, 7, 6, 5,
         4, 3, 2, 1, 0
     };
 
+    // The uniform model of six values: the low bits of a mediumband pitch lag (section 4.2.7.6.1).
     static final int[] PITCH_LOWBITS_MB = {213, 171, 128, 85, 43, 0};
 
+    // The model of a pitch lag as a change from the last frame's (section 4.2.7.6.1).
     static final int[] PITCH_DELTA = {
         210, 208, 206, 203, 199, 193, 183, 168, 142, 104, 74, 52, 37, 27, 20, 14, 10, 6, 4, 2, 0
     };
 
+    // The model of the pitch contour of a narrowband frame of 10 ms (section 4.2.7.6.1).
     static final int[] PITCH_CONTOUR_NB10MS = {113, 63, 0};
 
+    // The same for a narrowband frame of 20 ms (section 4.2.7.6.1).
     static final int[] PITCH_CONTOUR_NB20MS = {188, 176, 155, 138, 119, 97, 67, 43, 26, 10, 0};
 
+    // The same for a mediumband or wideband frame of 10 ms (section 4.2.7.6.1).
     static final int[] PITCH_CONTOUR_MBWB10MS = {165, 119, 80, 61, 47, 35, 27, 20, 14, 9, 4, 0};
 
+    // The same for a mediumband or wideband frame of 20 ms (section 4.2.7.6.1).
     static final int[] PITCH_CONTOUR_MBWB20MS = {
         223, 201, 183, 167, 152, 138, 124, 111, 98, 88, 79, 70, 62, 56, 50, 44, 39, 35, 31, 27, 24, 21, 18, 16, 14, 12,
         10, 8, 6, 4, 3, 2, 1, 0
     };
 
+    // The model of the periodicity index, which picks the set of long-term prediction filters (section 4.2.7.6.2).
     static final int[] LTP_FILTER = {179, 99, 0};
 
+    // The model of the filter chosen from the set of low periodicity (section 4.2.7.6.2).
     static final int[] LTP_FILTER0_SEL = {71, 56, 43, 30, 21, 12, 6, 0};
 
+    // The same for medium periodicity (section 4.2.7.6.2).
     static final int[] LTP_FILTER1_SEL = {199, 165, 144, 124, 109, 96, 84, 71, 61, 51, 42, 32, 23, 15, 8, 0};
 
+    // The same for high periodicity (section 4.2.7.6.2).
     static final int[] LTP_FILTER2_SEL = {
         241, 225, 211, 199, 187, 175, 164, 153, 142, 132, 123, 114, 105, 96, 88, 80, 72, 64, 57, 50, 44, 38, 33, 29, 24,
         20, 16, 12, 9, 5, 2, 0
     };
 
+    // The model of the long-term prediction scaling index (section 4.2.7.6.3).
     static final int[] LTP_SCALE_INDEX = {128, 64, 0};
 
+    // The uniform model of four values: the seed of the excitation's noise generator (section 4.2.7.7), and the low
+    // bits
+    // of a narrowband pitch lag (section 4.2.7.6.1).
     static final int[] LCG_SEED = {192, 128, 64, 0};
 
+    // The models of the rate level of the excitation, by signal type (section 4.2.7.8.1).
     static final int[][] EXC_RATE = {
         {241, 190, 178, 132, 87, 74, 41, 14, 0},
         {223, 193, 157, 140, 106, 57, 39, 18, 0}
     };
 
+    // The models of the number of pulses in a block, by rate level (section 4.2.7.8.2).
     static final int[][] PULSE_COUNT = {
         {125, 51, 26, 18, 15, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0},
         {198, 105, 45, 22, 15, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0},
@@ -141,6 +175,8 @@ final class SilkModels {
         {254, 253, 247, 220, 162, 106, 67, 42, 28, 18, 12, 9, 6, 4, 3, 2, 0, 0}
     };
 
+    // The models that split the pulses of a block between its halves, down to single samples, by block size and pulse
+    // count (section 4.2.7.8.3).
     static final int[][][] PULSE_LOCATION = {
         {
             {130, 0},
@@ -216,8 +252,11 @@ final class SilkModels {
         }
     };
 
+    // The model of each extra low bit of a pulse's magnitude (section 4.2.7.8.4).
     static final int[] EXCITATION_LSB = {120, 0};
 
+    // The models of a pulse's sign, by signal type, offset type and the number of pulses in the block (section
+    // 4.2.7.8.5).
     static final int[][][][] EXCITATION_SIGN = {
         {
             {

@@ -8,10 +8,13 @@ import lombok.experimental.UtilityClass;
 @UtilityClass
 final class SilkTables {
 
+    // The Q13 stereo prediction weights that the three stereo weight indices pick from (RFC 6716 section 4.2.7.1).
     static final int[] STEREO_WEIGHTS = {
         -13732, -10050, -8266, -7526, -6500, -5000, -2950, -820, 820, 2950, 5000, 6500, 7526, 8266, 10050, 13732
     };
 
+    // Which stage-2 residual model each narrowband or mediumband coefficient uses, by stage-1 index (section
+    // 4.2.7.5.2).
     static final int[][] LSF_S2_SEL_NBMB = {
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
         {1, 3, 1, 2, 2, 1, 2, 1, 1, 1},
@@ -47,6 +50,7 @@ final class SilkTables {
         {4, 4, 5, 4, 5, 6, 5, 6, 5, 4}
     };
 
+    // The same for wideband (section 4.2.7.5.2).
     static final int[][] LSF_S2_SEL_WB = {
         {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8},
         {10, 11, 11, 11, 11, 11, 10, 10, 10, 10, 10, 9, 9, 9, 8, 11},
@@ -82,16 +86,21 @@ final class SilkTables {
         {10, 11, 13, 11, 12, 11, 11, 11, 10, 9, 10, 14, 12, 8, 8, 8}
     };
 
+    // The two sets of narrowband and mediumband prediction weights for the stage-2 residual's backward prediction
+    // (section 4.2.7.5.2).
     static final int[][] LSF_PRED_WEIGHTS_NBMB = {
         {179, 138, 140, 148, 151, 149, 153, 151, 163},
         {116, 67, 82, 59, 92, 72, 100, 89, 92}
     };
 
+    // The same for wideband (section 4.2.7.5.2).
     static final int[][] LSF_PRED_WEIGHTS_WB = {
         {175, 148, 160, 176, 178, 173, 174, 164, 177, 174, 196, 182, 198, 192, 182},
         {68, 62, 66, 60, 72, 117, 85, 90, 118, 136, 151, 142, 160, 142, 155}
     };
 
+    // Which of the two prediction weight sets each narrowband or mediumband coefficient uses, by stage-1 index (section
+    // 4.2.7.5.2).
     static final int[][] LSF_WEIGHT_SEL_NBMB = {
         {0, 1, 0, 0, 0, 0, 0, 0, 0},
         {1, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -127,6 +136,7 @@ final class SilkTables {
         {1, 0, 1, 1, 0, 1, 1, 1, 1}
     };
 
+    // The same for wideband (section 4.2.7.5.2).
     static final int[][] LSF_WEIGHT_SEL_WB = {
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -162,6 +172,7 @@ final class SilkTables {
         {0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0}
     };
 
+    // The stage-1 codebook of narrowband and mediumband normalized LSFs, in Q8 (section 4.2.7.5.1).
     static final int[][] LSF_CODEBOOK_NBMB = {
         {12, 35, 60, 83, 108, 132, 157, 180, 206, 228},
         {15, 32, 55, 77, 101, 125, 151, 175, 201, 225},
@@ -197,6 +208,7 @@ final class SilkTables {
         {37, 48, 64, 84, 104, 118, 156, 177, 201, 230}
     };
 
+    // The stage-1 codebook of wideband normalized LSFs, in Q8 (section 4.2.7.5.1).
     static final int[][] LSF_CODEBOOK_WB = {
         {7, 23, 38, 54, 69, 85, 100, 116, 131, 147, 162, 178, 193, 208, 223, 239},
         {13, 25, 41, 55, 69, 83, 98, 112, 127, 142, 157, 171, 187, 203, 220, 236},
@@ -232,14 +244,19 @@ final class SilkTables {
         {15, 21, 35, 50, 61, 73, 86, 97, 110, 119, 129, 141, 175, 198, 218, 237}
     };
 
+    // The least spacing between narrowband and mediumband LSFs that stabilization keeps, in Q15 (section 4.2.7.5.4).
     static final int[] LSF_MIN_SPACING_NBMB = {250, 3, 6, 3, 3, 3, 4, 3, 3, 3, 461};
 
+    // The same for wideband (section 4.2.7.5.4).
     static final int[] LSF_MIN_SPACING_WB = {100, 3, 40, 3, 3, 3, 5, 14, 14, 10, 11, 3, 8, 9, 7, 3, 347};
 
+    // The order in which narrowband and mediumband LSFs are turned into the LPC polynomial (section 4.2.7.5.6).
     static final int[] LSF_ORDERING_NBMB = {0, 9, 6, 3, 4, 5, 8, 1, 2, 7};
 
+    // The same for wideband (section 4.2.7.5.6).
     static final int[] LSF_ORDERING_WB = {0, 15, 8, 7, 4, 11, 12, 3, 2, 13, 10, 5, 6, 9, 14, 1};
 
+    // The cosine table, in Q12, that the LSF to LPC conversion interpolates in (section 4.2.7.5.6).
     static final int[] COSINE = {
         4096, 4095, 4091, 4085, 4076, 4065, 4052, 4036, 4017, 3997, 3973, 3948, 3920, 3889, 3857, 3822, 3784, 3745,
         3703, 3659, 3613, 3564, 3513, 3461, 3406, 3349, 3290, 3229, 3166, 3102, 3035, 2967, 2896, 2824, 2751, 2676,
@@ -251,18 +268,24 @@ final class SilkTables {
         -4065, -4076, -4085, -4091, -4095, -4096
     };
 
+    // How many lags one step of a pitch lag's high bits spans, by bandwidth: narrowband, mediumband, wideband (section
+    // 4.2.7.6.1).
     static final int[] PITCH_SCALE = {4, 6, 8};
 
+    // The shortest pitch lag, 2 ms, in samples by bandwidth (section 4.2.7.6.1).
     static final int[] PITCH_MIN_LAG = {16, 24, 32};
 
+    // The longest pitch lag, 18 ms, in samples by bandwidth (section 4.2.7.6.1).
     static final int[] PITCH_MAX_LAG = {144, 216, 288};
 
+    // The pitch lag offsets of each subframe for narrowband frames of 10 ms, by contour index (section 4.2.7.6.1).
     static final int[][] PITCH_OFFSET_NB10MS = {
         {0, 0},
         {1, 0},
         {0, 1}
     };
 
+    // The same for narrowband frames of 20 ms (section 4.2.7.6.1).
     static final int[][] PITCH_OFFSET_NB20MS = {
         {0, 0, 0, 0},
         {2, 1, 0, -1},
@@ -277,6 +300,7 @@ final class SilkTables {
         {1, 0, 0, -1}
     };
 
+    // The same for mediumband and wideband frames of 10 ms (section 4.2.7.6.1).
     static final int[][] PITCH_OFFSET_MBWB10MS = {
         {0, 0},
         {0, 1},
@@ -292,6 +316,7 @@ final class SilkTables {
         {-3, 3}
     };
 
+    // The same for mediumband and wideband frames of 20 ms (section 4.2.7.6.1).
     static final int[][] PITCH_OFFSET_MBWB20MS = {
         {0, 0, 0, 0},
         {0, 0, 1, 1},
@@ -329,6 +354,7 @@ final class SilkTables {
         {-9, -3, 3, 9}
     };
 
+    // The five taps of the long-term prediction filters of low periodicity, in Q7 (section 4.2.7.6.2).
     static final int[][] LTP_FILTER0_TAPS = {
         {4, 6, 24, 7, 5},
         {0, 0, 2, 0, 0},
@@ -340,6 +366,7 @@ final class SilkTables {
         {16, 14, 38, -3, 33}
     };
 
+    // The same for medium periodicity (section 4.2.7.6.2).
     static final int[][] LTP_FILTER1_TAPS = {
         {13, 22, 39, 23, 12},
         {-1, 36, 64, 27, -6},
@@ -359,6 +386,7 @@ final class SilkTables {
         {3, -1, 21, 16, 41}
     };
 
+    // The same for high periodicity (section 4.2.7.6.2).
     static final int[][] LTP_FILTER2_TAPS = {
         {-6, 27, 61, 39, 5},
         {-11, 42, 88, 4, 1},
@@ -394,6 +422,7 @@ final class SilkTables {
         {2, 0, 9, 10, 88}
     };
 
+    // The Q9 weights of the narrowband and mediumband stage-2 residuals, by stage-1 index (section 4.2.7.5.3).
     static final int[][] LSF_WEIGHT_NBMB = {
         {2897, 2314, 2314, 2314, 2287, 2287, 2314, 2300, 2327, 2287},
         {2888, 2580, 2394, 2367, 2314, 2274, 2274, 2274, 2274, 2194},
@@ -429,6 +458,7 @@ final class SilkTables {
         {2793, 3160, 2726, 2553, 2846, 2513, 2181, 2394, 2221, 2181}
     };
 
+    // The same for wideband (section 4.2.7.5.3).
     static final int[][] LSF_WEIGHT_WB = {
         {3657, 2925, 2925, 2925, 2925, 2925, 2925, 2925, 2925, 2925, 2925, 2925, 2963, 2963, 2925, 2846},
         {3216, 3085, 2972, 3056, 3056, 3010, 3010, 3010, 2963, 2963, 3010, 2972, 2888, 2846, 2846, 2726},
@@ -464,18 +494,23 @@ final class SilkTables {
         {3920, 3967, 3010, 3197, 3357, 3216, 3291, 3291, 3479, 3704, 3441, 2726, 2181, 2460, 2580, 2607}
     };
 
+    // The Q14 factors the long-term prediction is scaled by, by scaling index (section 4.2.7.6.3).
     static final int[] LTP_SCALE_FACTOR = {15565, 12288, 8192};
 
+    // How many blocks of 16 samples the excitation of a SILK frame has, by bandwidth and frame length (section
+    // 4.2.7.8).
     static final int[][] SHELL_BLOCKS = {
         {5, 10},
         {8, 15},
         {10, 20}
     };
 
+    // The Q10 quantization offsets of the excitation, by signal type and offset type (section 4.2.7.8.6).
     static final int[][] QUANT_OFFSET = {
         {25, 60},
         {8, 25}
     };
 
+    // How many samples the stereo weights are interpolated over at the start of a frame, by bandwidth (section 4.2.8).
     static final int[] STEREO_INTERP_LEN = {64, 96, 128};
 }

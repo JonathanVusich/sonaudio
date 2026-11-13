@@ -153,6 +153,7 @@ class CeltWindowTables {
         1.00000000f,
         1.00000000f,
     };
+    // The square of the window, as the post-filter's and the overlap's code uses it.
     static final float[] WINDOW_SQUARED = {
         4.5275357e-09f,
         3.66647e-07f,
@@ -276,5 +277,6 @@ class CeltWindowTables {
         1.0f,
     };
 
+    // The window without its padding.
     static final float[] WINDOW = Arrays.copyOfRange(WINDOW_PADDED, PADDING, PADDING + LENGTH);
 }

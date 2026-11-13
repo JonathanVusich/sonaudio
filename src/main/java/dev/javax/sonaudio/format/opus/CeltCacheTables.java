@@ -28,6 +28,8 @@ class CeltCacheTables {
         174, 208, 240, 5, 57, 106, 151, 192, 231, 5, 59, 111, 158, 202, 243, 5, 55, 103, 147, 187, 224, 5, 60, 113, 161,
         206, 248, 4, 65, 122, 175, 224, 4, 67, 127, 182, 234
     };
+    // Where in BITS the cache of each band size starts, by frame size (from the shortest) and band; the band sizes and
+    // the frame sizes that give the same cache share it.
     static final int[] INDEX = {
         -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 41, 41, 41, 82, 82, 123, 164, 200, 222, 0, 0, 0, 0, 0, 0, 0, 0, 41,
         41, 41, 41, 123, 123, 123, 164, 164, 240, 266, 283, 295, 41, 41, 41, 41, 41, 41, 41, 41, 123, 123, 123, 123,
