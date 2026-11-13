@@ -143,7 +143,7 @@ final class CeltBitAllocator {
     private int reserveBits(final RangeDecoder rangeDecoder, final CeltFrame frame) {
         eighthsLeft = (frame.frameBits() << 3) - rangeDecoder.tellFraction() - 1;
         var anticollapseReserve = 0;
-        if (frame.blockMode() == BlockMode.SHORT
+        if (frame.blockMode() == CeltBlockMode.SHORT
                 && frame.sizeShift() >= 2
                 && eighthsLeft >= ((frame.sizeShift() + 2) << 3)) {
             anticollapseReserve = EIGHTH;

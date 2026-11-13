@@ -45,7 +45,8 @@ class CeltPulseUtilsTest {
         final var seen = new HashSet<List<Integer>>();
         final var vector = new int[dimensions];
         for (var index = 0L; index < count; index++) {
-            final var norm = CeltPulseUtils.decodeVector(dimensions, pulses, index, vector);
+            final var norm =
+                    CeltPulseUtils.decodeVector(dimensions, pulses, index, vector, new CeltPulseUtils.PulseCursor());
             assertThat(Arrays.stream(vector).map(Math::abs).sum()).isEqualTo(pulses);
             assertThat(Arrays.stream(vector)
                             .mapToLong(value -> (long) value * value)
@@ -84,7 +85,7 @@ class CeltPulseUtilsTest {
                 }
                 final var index = Math.floorMod(random.nextLong(), count);
                 final var vector = new int[dimensions];
-                CeltPulseUtils.decodeVector(dimensions, pulses, index, vector);
+                CeltPulseUtils.decodeVector(dimensions, pulses, index, vector, new CeltPulseUtils.PulseCursor());
                 assertThat(indexOf(vector))
                         .as("%d dimensions, %d pulses", dimensions, pulses)
                         .isEqualTo(index);

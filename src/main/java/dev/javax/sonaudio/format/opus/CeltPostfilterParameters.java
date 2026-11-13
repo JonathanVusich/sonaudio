@@ -5,14 +5,14 @@ package dev.javax.sonaudio.format.opus;
  * pitch period. A frame with none has gains of 0.
  *
  * @param period the pitch period in samples, from 15 to 1022
- * @param gains the gains of the filter's three taps: the centre one and the two pairs either side of it
+ * @param centreGain the gain of the tap at the period
+ * @param nearGain the gain of the two taps a sample either side of it
+ * @param farGain the gain of the two taps two samples either side of it
  */
-record CeltPostfilterParameters(int period, float[] gains) {
+record CeltPostfilterParameters(int period, float centreGain, float nearGain, float farGain) {
 
     /**
      * What a frame that has no post-filter has: no gain.
      */
-    static CeltPostfilterParameters none() {
-        return new CeltPostfilterParameters(0, new float[3]);
-    }
+    static final CeltPostfilterParameters NONE = new CeltPostfilterParameters(0, 0f, 0f, 0f);
 }

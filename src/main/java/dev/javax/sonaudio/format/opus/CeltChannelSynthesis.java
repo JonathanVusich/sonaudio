@@ -51,17 +51,19 @@ final class CeltChannelSynthesis {
     void synthesize(
             final CeltFrame frame,
             final float[] coefficients,
-            final DownmixMode downmix,
+            final CeltDownmix downmix,
             final CeltPostfilterParameters postfilter,
             final float[] output) {
         transformBlocks(frame, coefficients);
-        if (downmix == DownmixMode.AVERAGE) {
+        if (downmix == CeltDownmix.AVERAGE) {
             for (var index = 0; index < frame.frameSamples(); index++) {
                 samples[HISTORY + index] *= 0.5f;
             }
         }
         newPeriod = postfilter.period();
-        System.arraycopy(postfilter.gains(), 0, newGains, 0, 3);
+        newGains[0] = postfilter.centreGain();
+        newGains[1] = postfilter.nearGain();
+        newGains[2] = postfilter.farGain();
         applyPostfilter(frame.frameSamples());
         applyDeemphasis(frame.frameSamples(), output);
     }
@@ -70,7 +72,7 @@ final class CeltChannelSynthesis {
         final var blocks = frame.blocks();
         final var blockSize = frame.frameSamples() / blocks;
         var transform = transforms[frame.sizeShift()];
-        if (frame.blockMode() == BlockMode.SHORT) {
+        if (frame.blockMode() == CeltBlockMode.SHORT) {
             transform = transforms[0];
         }
         for (var block = 0; block < blocks; block++) {

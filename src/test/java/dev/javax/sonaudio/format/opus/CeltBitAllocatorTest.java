@@ -17,7 +17,7 @@ class CeltBitAllocatorTest {
     }
 
     private static CeltFrame frameOf(final int sizeShift, final int channels, final int bytes) {
-        return new CeltFrame(sizeShift, channels, 0, 21, bytes * 8, BlockMode.LONG);
+        return new CeltFrame(sizeShift, channels, 0, 21, bytes * 8, CeltBlockMode.LONG);
     }
 
     // Whatever the frame's bits say, what the bands are given never exceeds what the frame has, nor is negative.

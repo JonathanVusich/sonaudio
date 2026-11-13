@@ -49,6 +49,7 @@ final class CeltBandDecoder {
     private final float[] foldScratch = new float[MAX_BAND_COEFFICIENTS];
     private final float[] hadamardScratch = new float[MAX_BAND_COEFFICIENTS];
     private final int[] pulseVector = new int[MAX_BAND_COEFFICIENTS];
+    private final CeltPulseUtils.PulseCursor pulseCursor = new CeltPulseUtils.PulseCursor();
     private final BandState[] states = new BandState[MAX_DEPTH];
 
     // What one frame's decoding shares between the levels of the recursion.
@@ -630,7 +631,7 @@ final class CeltBandDecoder {
     private int decodePulses(final BandState state, final int pulseCount) {
         final var total = CeltPulseUtils.vectorCount(state.size, pulseCount);
         final var index = decodeUniformIndex(total);
-        final var norm = (float) CeltPulseUtils.decodeVector(state.size, pulseCount, index, pulseVector);
+        final var norm = (float) CeltPulseUtils.decodeVector(state.size, pulseCount, index, pulseVector, pulseCursor);
         final var gain = state.gain / (float) Math.sqrt(norm);
         CeltVectorUtils.scalePulses(pulseVector, state.x, state.xOffset, state.size, gain);
         CeltVectorUtils.spreadPulses(state.x, state.xOffset, state.size, state.blocks, pulseCount, spread);

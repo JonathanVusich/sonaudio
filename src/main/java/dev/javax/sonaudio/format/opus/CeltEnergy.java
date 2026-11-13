@@ -216,7 +216,7 @@ final class CeltEnergy {
     // lowered to the lesser of its and this frame's, instead.
     private void keepPreviousEnergies(final CeltFrame frame, final int channel) {
         final var last = previousEnergies[channel][0];
-        if (frame.blockMode() == BlockMode.LONG) {
+        if (frame.blockMode() == CeltBlockMode.LONG) {
             System.arraycopy(last, 0, previousEnergies[channel][1], 0, BAND_COUNT);
             System.arraycopy(energies[channel], 0, last, 0, BAND_COUNT);
             return;

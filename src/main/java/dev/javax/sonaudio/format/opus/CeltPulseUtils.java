@@ -61,33 +61,33 @@ class CeltPulseUtils {
      * @param pulses how many pulses in all
      * @param index which vector, below {@link #vectorCount}
      * @param vector where the vector's pulses go, one per dimension, signed
+     * @param cursor working space that holds what is left to decode between the dimensions
      * @return the sum of the squares of the vector's entries
      */
-    static long decodeVector(final int dimensions, final int pulses, final long index, final int[] vector) {
-        var remainingIndex = index;
-        var remainingPulses = pulses;
+    static long decodeVector(
+            final int dimensions, final int pulses, final long index, final int[] vector, final PulseCursor cursor) {
+        cursor.start(index, pulses);
         var norm = 0L;
         var position = 0;
         for (var left = dimensions; left > 2; left--) {
-            final var entry = decodeEntry(left, remainingPulses, remainingIndex);
-            remainingIndex = entry.remainingIndex();
-            remainingPulses = entry.remainingPulses();
-            vector[position] = entry.value();
-            norm += (long) entry.value() * entry.value();
+            final var value = decodeEntry(left, cursor);
+            vector[position] = value;
+            norm += (long) value * value;
             position++;
         }
-        return norm + decodeLastTwo(remainingPulses, remainingIndex, vector, position);
+        return norm + decodeLastTwo(cursor.pulses(), cursor.index(), vector, position);
     }
 
-    private static PulseEntry decodeEntry(final int left, final int pulses, final long index) {
-        if (pulses >= left) {
-            return decodeEntryWithManyPulses(left, pulses, index);
+    private static int decodeEntry(final int left, final PulseCursor cursor) {
+        if (cursor.pulses() >= left) {
+            return decodeEntryWithManyPulses(left, cursor);
         }
-        return decodeEntryWithFewPulses(left, pulses, index);
+        return decodeEntryWithFewPulses(left, cursor);
     }
 
-    private static PulseEntry decodeEntryWithManyPulses(final int left, final int pulses, final long index) {
-        var remaining = index;
+    private static int decodeEntryWithManyPulses(final int left, final PulseCursor cursor) {
+        final var pulses = cursor.pulses();
+        var remaining = cursor.index();
         final var negativeStart = pulseCount(left, pulses + 1);
         var sign = 1;
         if (remaining >= negativeStart) {
@@ -105,15 +105,18 @@ class CeltPulseUtils {
                 kept--;
             }
         }
-        remaining -= pulseCount(left, kept);
-        return new PulseEntry(remaining, kept, sign * (pulses - kept));
+        cursor.advance(remaining - pulseCount(left, kept), kept);
+        return sign * (pulses - kept);
     }
 
-    private static PulseEntry decodeEntryWithFewPulses(final int left, final int pulses, final long index) {
+    private static int decodeEntryWithFewPulses(final int left, final PulseCursor cursor) {
+        final var pulses = cursor.pulses();
+        final var index = cursor.index();
         final var low = pulseCount(pulses, left);
         final var high = pulseCount(pulses + 1, left);
         if (low <= index && index < high) {
-            return new PulseEntry(index - low, pulses, 0);
+            cursor.advance(index - low, pulses);
+            return 0;
         }
         var remaining = index;
         var sign = 1;
@@ -125,8 +128,8 @@ class CeltPulseUtils {
         do {
             kept--;
         } while (pulseCount(kept, left) > remaining);
-        remaining -= pulseCount(kept, left);
-        return new PulseEntry(remaining, kept, sign * (pulses - kept));
+        cursor.advance(remaining - pulseCount(kept, left), kept);
+        return sign * (pulses - kept);
     }
 
     // The last two dimensions are decoded without tables.
@@ -153,9 +156,31 @@ class CeltPulseUtils {
     }
 
     /**
-     * What decoding one dimension of a vector leaves: the index and the pulses still to place, and the entry.
+     * What is left to decode of a vector between its dimensions: the index and the pulses still to place. A decoder
+     * keeps one, so that decoding allocates nothing.
      */
-    private record PulseEntry(long remainingIndex, int remainingPulses, int value) {}
+    static final class PulseCursor {
+        private long index;
+        private int pulses;
+
+        void start(final long newIndex, final int newPulses) {
+            index = newIndex;
+            pulses = newPulses;
+        }
+
+        void advance(final long newIndex, final int newPulses) {
+            index = newIndex;
+            pulses = newPulses;
+        }
+
+        long index() {
+            return index;
+        }
+
+        int pulses() {
+            return pulses;
+        }
+    }
 
     /**
      * Finds how many pulses a band can have for a number of bits, as the closest of the counts the cache lists

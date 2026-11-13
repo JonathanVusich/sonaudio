@@ -10,7 +10,7 @@ package dev.javax.sonaudio.format.opus;
  * @param frameBits the frame's size in bits
  * @param blockMode whether it is one long block or short blocks
  */
-record CeltFrame(int sizeShift, int channels, int startBand, int endBand, int frameBits, BlockMode blockMode) {
+record CeltFrame(int sizeShift, int channels, int startBand, int endBand, int frameBits, CeltBlockMode blockMode) {
 
     /**
      * @return how many samples each channel has

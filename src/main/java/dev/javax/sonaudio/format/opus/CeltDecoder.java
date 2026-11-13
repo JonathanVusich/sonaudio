@@ -95,7 +95,7 @@ final class CeltDecoder {
         if (silence == Silence.SILENT) {
             consumed = frameBits;
         }
-        var postfilter = CeltPostfilterParameters.none();
+        var postfilter = CeltPostfilterParameters.NONE;
         if (startBand == 0 && consumed + POSTFILTER_MIN_BITS <= frameBits) {
             postfilter = decodePostfilter(rangeDecoder, frameBits);
             consumed = rangeDecoder.tell();
@@ -131,7 +131,7 @@ final class CeltDecoder {
 
     private CeltPostfilterParameters decodePostfilter(final RangeDecoder rangeDecoder, final int frameBits) {
         if (!rangeDecoder.decodeBit(POSTFILTER_PROBABILITY_BITS)) {
-            return CeltPostfilterParameters.none();
+            return CeltPostfilterParameters.NONE;
         }
         final var octave = rangeDecoder.decodeUniform(6);
         final var period = (16 << octave) + rangeDecoder.decodeRawBits(4 + octave) - 1;
@@ -141,18 +141,18 @@ final class CeltDecoder {
             tapset = rangeDecoder.decodeIcdf(CeltTables.TAPSET_ICDF, CeltTables.TAPSET_BITS);
         }
         final var taps = CeltTables.POSTFILTER_TAPS[tapset];
-        final var gains = new float[] {gain * taps[0], gain * taps[1], gain * taps[2]};
-        return new CeltPostfilterParameters(Math.max(period, MIN_POSTFILTER_PERIOD), gains);
+        return new CeltPostfilterParameters(
+                Math.max(period, MIN_POSTFILTER_PERIOD), gain * taps[0], gain * taps[1], gain * taps[2]);
     }
 
-    private BlockMode decodeBlockMode(
+    private CeltBlockMode decodeBlockMode(
             final RangeDecoder rangeDecoder, final int sizeShift, final int frameBits, final int consumed) {
         if (sizeShift != 0
                 && consumed + TRANSIENT_PROBABILITY_BITS <= frameBits
                 && rangeDecoder.decodeBit(TRANSIENT_PROBABILITY_BITS)) {
-            return BlockMode.SHORT;
+            return CeltBlockMode.SHORT;
         }
-        return BlockMode.LONG;
+        return CeltBlockMode.LONG;
     }
 
     // Decodes everything that follows the frame's header: energies, bit allocation, shapes, anti-collapse and
@@ -184,10 +184,10 @@ final class CeltDecoder {
             final Silence silence,
             final CeltPostfilterParameters postfilter,
             final float[][] output) {
-        var downmix = DownmixMode.NONE;
+        var downmix = CeltDownmix.NONE;
         if (outputChannels < frame.channels()) {
             addSecondChannel(frame);
-            downmix = DownmixMode.AVERAGE;
+            downmix = CeltDownmix.AVERAGE;
         }
         if (silence == Silence.SILENT) {
             energy.setSilent();

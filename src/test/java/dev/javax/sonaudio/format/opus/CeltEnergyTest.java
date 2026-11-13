@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 class CeltEnergyTest {
 
-    private static CeltFrame frame(final int startBand, final int endBand, final BlockMode blockMode) {
+    private static CeltFrame frame(final int startBand, final int endBand, final CeltBlockMode blockMode) {
         return new CeltFrame(3, 1, startBand, endBand, 1000, blockMode);
     }
 
@@ -33,10 +33,10 @@ class CeltEnergyTest {
     @Test
     void scalesEachBandByTwoToItsEnergyAndMean() {
         final var energy = new CeltEnergy();
-        energy.decodeCoarse(decoderOf(1), frame(0, 21, BlockMode.LONG));
+        energy.decodeCoarse(decoderOf(1), frame(0, 21, CeltBlockMode.LONG));
         final var coefficients = new float[960];
         Arrays.fill(coefficients, 1f);
-        final var frame = frame(0, 21, BlockMode.LONG);
+        final var frame = frame(0, 21, CeltBlockMode.LONG);
 
         energy.denormalize(0, frame, coefficients);
 
@@ -51,7 +51,7 @@ class CeltEnergyTest {
         final var energy = new CeltEnergy();
         final var coefficients = new float[960];
         Arrays.fill(coefficients, 1f);
-        final var frame = frame(17, 21, BlockMode.LONG);
+        final var frame = frame(17, 21, CeltBlockMode.LONG);
         energy.decodeCoarse(decoderOf(2), frame);
 
         energy.denormalize(0, frame, coefficients);
@@ -64,7 +64,7 @@ class CeltEnergyTest {
     void codesNoEnergyInTheBandsOutsideTheFrame() {
         final var energy = new CeltEnergy();
 
-        energy.decodeCoarse(decoderOf(3), frame(17, 21, BlockMode.LONG));
+        energy.decodeCoarse(decoderOf(3), frame(17, 21, CeltBlockMode.LONG));
 
         assertThat(energy.energy(0, 5)).isZero();
         assertThat(energy.energy(0, 19)).isNotZero();
@@ -73,7 +73,7 @@ class CeltEnergyTest {
     @Test
     void remembersTheLastTwoFramesAfterLongBlocks() {
         final var energy = new CeltEnergy();
-        final var frame = frame(0, 21, BlockMode.LONG);
+        final var frame = frame(0, 21, CeltBlockMode.LONG);
         energy.decodeCoarse(decoderOf(4), frame);
         final var first = energy.energy(0, 3);
         energy.finishFrame(frame, 1);
@@ -88,11 +88,11 @@ class CeltEnergyTest {
     @Test
     void lowersTheLastFramesEnergyAfterShortBlocks() {
         final var energy = new CeltEnergy();
-        final var longFrame = frame(0, 21, BlockMode.LONG);
+        final var longFrame = frame(0, 21, CeltBlockMode.LONG);
         energy.decodeCoarse(decoderOf(6), longFrame);
         energy.finishFrame(longFrame, 1);
         final var before = energy.previousEnergy(0, 0, 3);
-        final var shortFrame = frame(0, 21, BlockMode.SHORT);
+        final var shortFrame = frame(0, 21, CeltBlockMode.SHORT);
         energy.decodeCoarse(decoderOf(7), shortFrame);
         final var current = energy.energy(0, 3);
 
@@ -104,7 +104,7 @@ class CeltEnergyTest {
     @Test
     void marksTheBandsAFrameDidNotCodeAsSilentForTheNextFrame() {
         final var energy = new CeltEnergy();
-        final var frame = frame(17, 21, BlockMode.LONG);
+        final var frame = frame(17, 21, CeltBlockMode.LONG);
         energy.decodeCoarse(decoderOf(8), frame);
 
         energy.finishFrame(frame, 1);
@@ -116,7 +116,7 @@ class CeltEnergyTest {
     @Test
     void aMonoFrameGivesTheSecondChannelItsEnergies() {
         final var energy = new CeltEnergy();
-        final var frame = frame(0, 21, BlockMode.LONG);
+        final var frame = frame(0, 21, CeltBlockMode.LONG);
         energy.decodeCoarse(decoderOf(9), frame);
 
         energy.finishFrame(frame, 1);
@@ -127,7 +127,7 @@ class CeltEnergyTest {
     @Test
     void forgetsEverythingOnReset() {
         final var energy = new CeltEnergy();
-        final var frame = frame(0, 21, BlockMode.LONG);
+        final var frame = frame(0, 21, CeltBlockMode.LONG);
         energy.decodeCoarse(decoderOf(10), frame);
         energy.finishFrame(frame, 1);
 
