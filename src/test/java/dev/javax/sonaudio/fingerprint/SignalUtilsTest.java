@@ -3,6 +3,7 @@ package dev.javax.sonaudio.fingerprint;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.javax.sonaudio.format.IntPcmFrame;
+import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 
 class SignalUtilsTest {
@@ -60,6 +61,22 @@ class SignalUtilsTest {
     @Test
     void mixChannelsAveragesMoreThanTwo() {
         assertThat(SignalUtils.mixChannels(new float[][] {{3}, {6}, {9}}, 0)).isEqualTo(6f);
+    }
+
+    @Test
+    void sixChannelsAreMixedWithLibswresamplesFiveOneWeights() {
+        final var channels = new float[][] {{1}, {1}, {1}, {100}, {1}, {1}};
+
+        assertThat(SignalUtils.mixedDownFromVorbisLayout(channels, 1)).containsExactly(1f);
+    }
+
+    @Test
+    void theCentreOfFiveOneCountsMoreThanAFrontChannel() {
+        final var centre = SignalUtils.mixedDownFromVorbisLayout(new float[][] {{0}, {0}, {1}, {0}, {0}, {0}}, 1);
+        final var front = SignalUtils.mixedDownFromVorbisLayout(new float[][] {{1}, {0}, {0}, {0}, {0}, {0}}, 1);
+
+        assertThat(centre[0]).isCloseTo(0.292893f, Offset.offset(1e-6f));
+        assertThat(front[0]).isCloseTo(0.207107f, Offset.offset(1e-6f));
     }
 
     @Test

@@ -3,6 +3,7 @@ package dev.javax.sonaudio.format.flac;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.javax.sonaudio.internal.VorbisField;
 import dev.javax.sonaudio.metadata.Blob;
 import dev.javax.sonaudio.metadata.TagValue;
 import java.util.LinkedHashSet;
@@ -18,7 +19,7 @@ class FlacUtilsTest {
 
         final var fields = FlacUtils.toFields("artist", values).toList();
 
-        assertThat(fields).containsExactly(new Field("ARTIST", "Coldplay"), new Field("ARTIST", "9"));
+        assertThat(fields).containsExactly(new VorbisField("ARTIST", "Coldplay"), new VorbisField("ARTIST", "9"));
     }
 
     @Test

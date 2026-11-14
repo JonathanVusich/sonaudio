@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.MD5Checksum;
+import dev.javax.sonaudio.internal.VorbisField;
 import dev.javax.sonaudio.metadata.RawMetadata;
 import dev.javax.sonaudio.metadata.Tag;
 import dev.javax.sonaudio.metadata.TagSet;
@@ -106,7 +107,7 @@ class FlacParserTest {
     void fieldNamesAreCaseInsensitive() throws IOException, InvalidFormatException {
         final var parsed = parseFlac(flacStream(
                 streamInfo(blockHeader(BlockType.STREAM_INFO)),
-                vorbisComment(lastHeader(BlockType.VORBIS_COMMENT), new Field("TiTlE", "Mixed Case"))));
+                vorbisComment(lastHeader(BlockType.VORBIS_COMMENT), new VorbisField("TiTlE", "Mixed Case"))));
 
         assertThat(parsed.findValues(Tag.TRACK_TITLE)).containsExactly(new TagValue.Str("Mixed Case"));
     }
@@ -120,7 +121,8 @@ class FlacParserTest {
 
     @Test
     void rejectMissingStreamInfo() {
-        final var comment = vorbisComment(lastHeader(BlockType.VORBIS_COMMENT), new Field("TITLE", "No Stream Info"));
+        final var comment =
+                vorbisComment(lastHeader(BlockType.VORBIS_COMMENT), new VorbisField("TITLE", "No Stream Info"));
         assertThatThrownBy(() -> parseFlac(flacStream(comment)))
                 .isInstanceOf(InvalidFormatException.class)
                 .hasMessageContaining("STREAMINFO");
@@ -178,7 +180,7 @@ class FlacParserTest {
         final var blocks = new Block[] {
             streamInfo,
             new SeekTable(blockHeader(BlockType.SEEK_TABLE), List.of(new SeekPoint(0, 0, (short) 4096))),
-            vorbisComment(blockHeader(BlockType.VORBIS_COMMENT), new Field("TITLE", "Round Trip")),
+            vorbisComment(blockHeader(BlockType.VORBIS_COMMENT), new VorbisField("TITLE", "Round Trip")),
             new Application(blockHeader(BlockType.APPLICATION), 0x52494646, new byte[] {1, 2, 3, 4}),
             cueSheet(blockHeader(BlockType.CUESHEET)),
             new Picture(
@@ -247,7 +249,7 @@ class FlacParserTest {
         return new StreamInfo(header, new MD5Checksum(new byte[16]), 4096, 4096, 0, 0, 44_100, 2, 16, 441_000);
     }
 
-    private static VorbisComment vorbisComment(final BlockHeader header, final Field... fields) {
+    private static VorbisComment vorbisComment(final BlockHeader header, final VorbisField... fields) {
         return new VorbisComment(header, "sona-test", List.of(fields));
     }
 
@@ -272,7 +274,7 @@ class FlacParserTest {
     }
 
     private static byte[] commentStream() {
-        final var comment = vorbisComment(lastHeader(BlockType.VORBIS_COMMENT), new Field("TITLE", "x"));
+        final var comment = vorbisComment(lastHeader(BlockType.VORBIS_COMMENT), new VorbisField("TITLE", "x"));
         try {
             return flacStream(streamInfo(blockHeader(BlockType.STREAM_INFO)), comment)
                     .readAllBytes();

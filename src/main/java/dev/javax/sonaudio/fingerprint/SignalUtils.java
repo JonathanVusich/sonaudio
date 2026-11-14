@@ -1,6 +1,7 @@
 package dev.javax.sonaudio.fingerprint;
 
 import dev.javax.sonaudio.format.IntPcmFrame;
+import java.util.Arrays;
 import lombok.experimental.UtilityClass;
 
 /**
@@ -14,6 +15,21 @@ class SignalUtils {
     private static final int WIDE_BITS_PER_SAMPLE = 32;
     private static final float HALF = 0.5f;
     private static final int RESAMPLE_FIRST_WEIGHT = 1;
+    private static final double FRONT = Math.sqrt(0.5);
+    private static final double CENTRE = 1;
+    private static final double OTHER = 0.5;
+    private static final double SILENT = 0;
+    // For three to eight channels: front left and right, centre, low-frequency, back, side, in the order FFmpeg gives
+    // the
+    // channels of Opus's layouts.
+    private static final double[][] VORBIS_LAYOUT_WEIGHTS = {
+        {FRONT, FRONT, CENTRE},
+        {FRONT, FRONT, OTHER, OTHER},
+        {FRONT, FRONT, CENTRE, OTHER, OTHER},
+        {FRONT, FRONT, CENTRE, SILENT, OTHER, OTHER},
+        {FRONT, FRONT, CENTRE, SILENT, OTHER, OTHER, OTHER},
+        {FRONT, FRONT, CENTRE, SILENT, OTHER, OTHER, OTHER, OTHER},
+    };
 
     /**
      * Audio of 16 bits or less is 16-bit samples to libswresample, and any more is 32-bit ones.
@@ -75,6 +91,40 @@ class SignalUtils {
             mono[i] = mixChannels(channels, i);
         }
         return mono;
+    }
+
+    /**
+     * Opus decodes three to eight channels in Vorbis's layouts, which libswresample mixes to mono with its own matrix
+     * (front channels by the square root of a half, the centre by one, the others by a half, the low-frequency one by
+     * nothing, all divided by their sum so they add up to one). Any other count is averaged.
+     *
+     * @return the first {@code length} samples of the channels of such a layout mixed to one
+     */
+    static float[] mixedDownFromVorbisLayout(final float[][] channels, final int length) {
+        if (channels.length <= 2 || channels.length > VORBIS_LAYOUT_WEIGHTS.length + 2) {
+            return mixedDown(channels, length);
+        }
+        final var weights = monoWeights(VORBIS_LAYOUT_WEIGHTS[channels.length - 3]);
+        final var mono = new float[length];
+        for (var i = 0; i < length; i++) {
+            var sum = 0f;
+            for (var channel = 0; channel < weights.length; channel++) {
+                if (weights[channel] != 0f) {
+                    sum += channels[channel][i] * weights[channel];
+                }
+            }
+            mono[i] = sum;
+        }
+        return mono;
+    }
+
+    private static float[] monoWeights(final double[] unscaled) {
+        final var total = Arrays.stream(unscaled).sum();
+        final var weights = new float[unscaled.length];
+        for (var channel = 0; channel < unscaled.length; channel++) {
+            weights[channel] = (float) (unscaled[channel] / total);
+        }
+        return weights;
     }
 
     // Stereo is libswresample's two halves, and more channels an equal share each.

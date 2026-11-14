@@ -2,13 +2,14 @@ package dev.javax.sonaudio.format;
 
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.mp3.Mp3Decoder;
+import dev.javax.sonaudio.format.opus.OpusDecoder;
 import java.io.IOException;
 import java.util.NoSuchElementException;
 
 /**
  * Decoded audio whose frames are floating-point numbers, as a decoder that works in floating point makes them.
  */
-public sealed interface FloatPcmAudio extends PcmAudio permits Mp3Decoder {
+public sealed interface FloatPcmAudio extends PcmAudio permits Mp3Decoder, OpusDecoder {
 
     /**
      * @return the next frame

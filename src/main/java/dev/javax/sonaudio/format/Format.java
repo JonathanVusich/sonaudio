@@ -16,7 +16,15 @@ public enum Format {
     /**
      * MPEG-1, MPEG-2 and MPEG-2.5 audio of Layers I, II and III, which FFmpeg reads whatever its extension.
      */
-    MP3("mp3", "mp2", "mp1");
+    MP3("mp3", "mp2", "mp1"),
+    /**
+     * ALAC, Apple Lossless, in an MPEG-4 file.
+     */
+    ALAC("m4a"),
+    /**
+     * Opus, as RFC 6716 specifies it, in an Ogg file, as RFC 7845 specifies.
+     */
+    OPUS("opus");
 
     /**
      * The extensions of this format's files, lowercase and without the dot.

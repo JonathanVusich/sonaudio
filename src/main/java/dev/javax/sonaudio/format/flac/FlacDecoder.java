@@ -4,6 +4,7 @@ import dev.javax.bitstream.BitInputStream;
 import dev.javax.sonaudio.exception.InvalidFormatException;
 import dev.javax.sonaudio.format.IntPcmAudio;
 import dev.javax.sonaudio.format.IntPcmFrame;
+import dev.javax.sonaudio.internal.Crc;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;

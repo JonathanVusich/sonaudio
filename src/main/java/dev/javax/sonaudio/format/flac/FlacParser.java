@@ -6,6 +6,7 @@ import dev.javax.sonaudio.format.Format;
 import dev.javax.sonaudio.format.MD5Checksum;
 import dev.javax.sonaudio.format.Parser;
 import dev.javax.sonaudio.internal.FieldUtils;
+import dev.javax.sonaudio.internal.VorbisCommentReader;
 import dev.javax.sonaudio.metadata.RawMetadata;
 import dev.javax.sonaudio.metadata.RawMetadataBuilder;
 import java.io.DataInputStream;
@@ -31,6 +32,8 @@ public final class FlacParser implements Parser {
 
     static final int MEDIA_CATALOG_NUMBER_SIZE = 128;
     static final int ISRC_SIZE = 12;
+
+    private final VorbisCommentReader vorbisCommentReader = new VorbisCommentReader();
 
     /**
      * Makes a parser, which keeps no state between files, so one can parse every FLAC file, from any thread.
@@ -58,13 +61,7 @@ public final class FlacParser implements Parser {
         for (final var comment : comments) {
             final var fields = comment.fields();
             for (final var field : fields) {
-                final var fieldName = field.name().toLowerCase();
-                final var fieldTag = FlacTag.fieldTag(fieldName);
-                switch (fieldTag) {
-                    case FieldTag.Known(final var flacTag) ->
-                        builder.addTag(flacTag.getTag(), flacTag.toTagValue(field.content()));
-                    case FieldTag.Unknown(final var name) -> builder.addUnknownTag(name, field.content());
-                }
+                field.addTag(builder);
             }
         }
         return builder.build();
@@ -146,34 +143,10 @@ public final class FlacParser implements Parser {
         return new SeekTable(header, List.copyOf(seekPoints));
     }
 
-    // The vendor's and the fields' lengths and the field count are little-endian u32s.
     private VorbisComment readVorbisComment(final DataInputStream inputStream, final BlockHeader header)
             throws IOException, InvalidFormatException {
-        final var length = Integer.reverseBytes(inputStream.readInt());
-        final var vendor = readUtf8(inputStream, length, header);
-        final var numberOfFields = Integer.reverseBytes(inputStream.readInt());
-        // Each field starts with its 4-byte length, so more fields than that can't fit in the block.
-        if (numberOfFields < 0 || numberOfFields > header.size() / 4) {
-            throw new InvalidFormatException("Incorrect number of Vorbis comment fields: " + numberOfFields);
-        }
-        final var fields = new ArrayList<Field>(numberOfFields);
-        for (var i = 0; i < numberOfFields; i++) {
-            fields.add(readVorbisField(inputStream, header));
-        }
-        return new VorbisComment(header, vendor, List.copyOf(fields));
-    }
-
-    private Field readVorbisField(final DataInputStream inputStream, final BlockHeader header)
-            throws IOException, InvalidFormatException {
-        final var fieldLength = Integer.reverseBytes(inputStream.readInt());
-        final var fieldContent = readUtf8(inputStream, fieldLength, header);
-        final var nameEnd = fieldContent.indexOf("=");
-        if (nameEnd < 0) {
-            throw new InvalidFormatException("Vorbis comment field without a '=': " + fieldContent);
-        }
-        final var name = fieldContent.substring(0, nameEnd);
-        final var content = fieldContent.substring(nameEnd + 1);
-        return new Field(name, content);
+        final var comments = vorbisCommentReader.readVorbisComments(inputStream, header.size());
+        return new VorbisComment(header, comments.vendor(), comments.fields());
     }
 
     private CueSheet readCueSheet(final DataInputStream inputStream, final BlockHeader header) throws IOException {

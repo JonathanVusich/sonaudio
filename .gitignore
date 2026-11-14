@@ -29,3 +29,6 @@ replay_pid*
 .gradle/
 build/
 /.idea
+
+# FATE samples and their references, which reference/prepare-fate.sh prepares
+/.fate-samples/
